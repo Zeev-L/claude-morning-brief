@@ -7,47 +7,54 @@
  * The deployment /exec URL IS the secret (long, unguessable — Slack-style),
  * exactly like the MiK webhook pattern.
  *
- * SETUP (one time):
- *   1. script.google.com → New project → paste this file.
- *   2. Deploy → New deployment → type "Web app".
- *        - Execute as: Me (your account)
- *        - Who has access: Anyone   (the long URL is the secret)
- *   3. Authorize when prompted (gives it permission to send mail as you).
- *   4. Copy the Web app URL (ends in /exec).
- *   5. Save it locally:
- *        echo 'PASTE_THE_EXEC_URL_HERE' > ~/.claude/morning-brief/state/email-webhook.txt
+ * Deploy as: Web app, Execute as = Me, Who has access = Anyone.
+ * run.sh POSTs JSON {to, subject, body}. The recipient is taken from `to`
+ * (the script owner Session can be blank for "Anyone"-access web apps).
  *
- * Test from the terminal:
- *   curl -s -X POST "$(cat ~/.claude/morning-brief/state/email-webhook.txt)" \
- *     -H 'Content-Type: application/json' \
- *     --data '{"subject":"MB test","body":"hello from the webhook"}'
+ * GET ?diag=1 returns the diagnostics of the last POST (what the web app
+ * actually received + whether the email sent) — handy for debugging headless.
  */
 
+function json(o) {
+  return ContentService
+    .createTextOutput(JSON.stringify(o))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
 function doPost(e) {
+  var diag = {};
   try {
-    var data = JSON.parse(e.postData.contents);
+    diag.hasE = !!e;
+    diag.hasPostData = !!(e && e.postData);
+    diag.contentType = (e && e.postData) ? e.postData.type : null;
+    diag.paramKeys = (e && e.parameter) ? Object.keys(e.parameter) : [];
+
+    // body may arrive as a raw JSON post body OR as form parameters
+    var raw = (e && e.postData && e.postData.contents) ? e.postData.contents : null;
+    diag.rawLen = raw ? raw.length : 0;
+    var data = raw ? JSON.parse(raw) : ((e && e.parameter) ? e.parameter : {});
+
+    var to = data.to || Session.getEffectiveUser().getEmail();
     var subject = data.subject || 'Morning Brief';
     var body = data.body || '(empty)';
+    diag.to = to;
 
-    // recipient = the account running the script (you)
-    var to = Session.getActiveUser().getEmail();
-
-    // markdown body sent as plain text — renders readably in Gmail.
     GmailApp.sendEmail(to, subject, body);
+    diag.sent = true;
 
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: true, to: to }))
-      .setMimeType(ContentService.MimeType.JSON);
+    PropertiesService.getScriptProperties().setProperty('lastDiag', JSON.stringify(diag));
+    return json({ ok: true, to: to });
   } catch (err) {
-    return ContentService
-      .createTextOutput(JSON.stringify({ ok: false, error: String(err) }))
-      .setMimeType(ContentService.MimeType.JSON);
+    diag.error = String(err);
+    try { PropertiesService.getScriptProperties().setProperty('lastDiag', JSON.stringify(diag)); } catch (e2) {}
+    return json({ ok: false, error: String(err) });
   }
 }
 
-// optional: lets you open the /exec URL in a browser to confirm it's live
-function doGet() {
-  return ContentService
-    .createTextOutput(JSON.stringify({ ok: true, service: 'morning-brief-mailer' }))
-    .setMimeType(ContentService.MimeType.JSON);
+function doGet(e) {
+  if (e && e.parameter && e.parameter.diag) {
+    var d = PropertiesService.getScriptProperties().getProperty('lastDiag') || '{}';
+    return json({ lastDiag: JSON.parse(d) });
+  }
+  return json({ ok: true, service: 'morning-brief-mailer' });
 }

@@ -136,16 +136,26 @@ WEBHOOK_FILE="$STATE/email-webhook.txt"
 if [ -f "$WEBHOOK_FILE" ] && [ -s "$WEBHOOK_FILE" ]; then
   WEBHOOK_URL="$(tr -d '[:space:]' < "$WEBHOOK_FILE")"
   log "posting brief to email webhook..."
-  HTTP_CODE="$(curl -sS -L -o /tmp/mb-webhook-resp.txt -w '%{http_code}' \
+  # optional explicit recipient (gitignored); falls back to script owner if absent
+  EMAIL_TO=""
+  [ -f "$STATE/email-to.txt" ] && EMAIL_TO="$(tr -d '[:space:]' < "$STATE/email-to.txt")"
+  # NOTE: do NOT follow redirects (-L). Apps Script runs doPost on the initial
+  # /exec POST and returns 302 to a sandbox URL; following it converts to GET and
+  # yields a misleading 405. The email is already sent by the time we get the 302.
+  HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' \
     -X POST "$WEBHOOK_URL" \
     -H 'Content-Type: application/json' \
     --data "$("$NODE_BIN" -e '
       const fs=require("fs");
       const body=fs.readFileSync(process.argv[1],"utf8");
-      process.stdout.write(JSON.stringify({subject:"Morning Brief — "+process.argv[2], body}));
-    ' "$BRIEF_FILE" "$TODAY")" 2>>"$RUN_LOG")" || true
-  log "webhook http_code=${HTTP_CODE:-<none>} resp=$(head -c 200 /tmp/mb-webhook-resp.txt 2>/dev/null)"
-  rm -f /tmp/mb-webhook-resp.txt
+      const payload={subject:"Morning Brief — "+process.argv[2], body};
+      if(process.argv[3]) payload.to=process.argv[3];
+      process.stdout.write(JSON.stringify(payload));
+    ' "$BRIEF_FILE" "$TODAY" "$EMAIL_TO")" 2>>"$RUN_LOG")" || true
+  case "$HTTP_CODE" in
+    302|200) log "email sent via webhook (http $HTTP_CODE)" ;;
+    *)       log "WARN: webhook returned http ${HTTP_CODE:-<none>} (email may not have sent; .md is on Desktop)" ;;
+  esac
 else
   log "no email webhook configured (state/email-webhook.txt) — skipping email"
 fi
