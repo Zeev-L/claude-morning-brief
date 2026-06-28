@@ -11,7 +11,7 @@ echo "→ creating local dirs (state, logs, Desktop output)…"
 mkdir -p "$BASE/state" "$BASE/logs" "$HOME/Desktop/Morning Briefs"
 
 echo "→ chmod scripts…"
-chmod +x "$BASE/run.sh" "$BASE/gather.js" "$BASE/render.js" "$BASE/install.sh" 2>/dev/null || true
+chmod +x "$BASE/run.sh" "$BASE/gather.js" "$BASE/render.js" "$BASE/resume.sh" "$BASE/install.sh" 2>/dev/null || true
 
 echo "→ building + registering the claudemb:// resume handler…"
 # A tiny AppleScript app that handles claudemb://resume?id=..&cwd=.. links from

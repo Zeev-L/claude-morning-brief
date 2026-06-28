@@ -18,9 +18,12 @@ const fs = require("fs");
 const material = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
 let summary = [];
 try {
-  let raw = fs.readFileSync(process.argv[3], "utf8").trim();
-  raw = raw.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+  let raw = fs.readFileSync(process.argv[3], "utf8");
+  // tolerate code fences / stray prose: extract the outermost [ ... ] array
+  const a = raw.indexOf("["), b = raw.lastIndexOf("]");
+  if (a !== -1 && b > a) raw = raw.slice(a, b + 1);
   summary = JSON.parse(raw);
+  if (!Array.isArray(summary)) summary = [];
 } catch (_) { summary = []; }
 const dateHuman = process.argv[4] || "";
 const bannerText = process.argv[5] || ""; // shown on idle days
@@ -42,8 +45,9 @@ function resumeLink(s) {
   return "claudemb://resume?" + q;
 }
 
-function card(s) {
-  const sum = byId[s.sessionId] || {};
+function card(s, i) {
+  // join by sessionId; fall back to position (summary is returned in input order)
+  const sum = byId[s.sessionId] || summary[i] || {};
   const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
   const did = Array.isArray(sum.did) ? sum.did : (sum.did ? [sum.did] : []);
   const stopped = sum.stopped || "";
@@ -106,8 +110,8 @@ function shell(inner, intro) {
 
 function textVersion(sessions) {
   let out = `בריף בוקר — ${dateHuman}\n\n`;
-  sessions.forEach((s) => {
-    const sum = byId[s.sessionId] || {};
+  sessions.forEach((s, i) => {
+    const sum = byId[s.sessionId] || summary[i] || {};
     const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
     out += `■ ${title}  [${s.project || ""}]\n`;
     const did = Array.isArray(sum.did) ? sum.did : [];
@@ -121,7 +125,7 @@ function textVersion(sessions) {
 
 const sessions = material.sessions || [];
 const intro = bannerText ? "תזכורת מהבריף האחרון." : "סיכום הפעילות שלך מאז הבריף הקודם.";
-const inner = sessions.map(card).join("");
+const inner = sessions.map((s, i) => card(s, i)).join("");
 process.stdout.write(JSON.stringify({
   html: shell(inner, intro),
   text: textVersion(sessions),

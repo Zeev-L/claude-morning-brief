@@ -100,6 +100,8 @@ function main() {
       let cwd = null;
       let sessionLast = 0;
       let title = null;          // the session's Claude title (sidebar name)
+      let isInteractive = false; // real interactive session? (vs. a headless `claude -p` call)
+      let realUserTotal = 0;     // human prompts across the whole transcript (not just since)
       const userMsgs = [];
       const asstMsgs = [];
 
@@ -109,6 +111,13 @@ function main() {
         try { o = JSON.parse(line); } catch (_) { continue; }
         if (o.cwd && !cwd) cwd = o.cwd;
         if (o.type === "custom-title" && o.customTitle) title = o.customTitle; // last wins
+        // interactive sessions emit `system`/`mode` records; headless `claude -p`
+        // calls (the tool's own summarizer/mailer invocations) do NOT.
+        if (o.type === "system" || o.type === "mode") isInteractive = true;
+        if (o.type === "user" && o.message) {
+          const tt = extractText(o.message.content);
+          if (!isNoise(tt)) realUserTotal++;
+        }
         const ts = o.timestamp ? Date.parse(o.timestamp) : NaN;
         if (!Number.isNaN(ts)) {
           if (ts > sessionLast) sessionLast = ts;
@@ -128,6 +137,8 @@ function main() {
       }
 
       if (userMsgs.length === 0 && asstMsgs.length === 0) continue; // nothing new in this session
+      if (!isInteractive) continue;   // skip the tool's own headless `claude -p` calls
+      if (realUserTotal < 2) continue; // skip trivial/abandoned fragments
 
       sessions.push({
         project: cleanProjectName(dir, cwd),
@@ -143,25 +154,43 @@ function main() {
     }
   }
 
-  // --- one unit per SESSION (he works on many topics from one cwd, so cwd-
-  // grouping would merge unrelated work; resume is per-session anyway) ----------
-  // oldest -> newest, so the brief reads in chronological order.
+  // --- merge transcripts that belong to the same conversation -----------------
+  // A single Claude conversation can span several .jsonl files (e.g. after a
+  // compaction/resume), so group by title. Untitled real sessions stay separate
+  // (keyed by their own id). The resume target is the most-recent transcript.
   sessions.sort((a, b) => a.lastActivity - b.lastActivity);
+  const groups = new Map();
+  for (const s of sessions) {
+    const key = (s.title && s.title.trim()) ? "t:" + s.title.trim() : "s:" + s.sessionId;
+    if (!groups.has(key)) {
+      groups.set(key, {
+        project: s.project, cwd: s.cwd, sessionId: s.sessionId, title: s.title,
+        lastActivity: s.lastActivity, userMsgs: [], lastAssistant: [],
+      });
+    }
+    const g = groups.get(key);
+    if (s.lastActivity >= g.lastActivity) { // newest transcript wins for resume + project
+      g.lastActivity = s.lastActivity; g.sessionId = s.sessionId; g.cwd = s.cwd || g.cwd; g.project = s.project;
+    }
+    g.userMsgs.push(...s.userMsgs);
+    g.lastAssistant.push(...s.lastAssistant);
+  }
 
-  let units = sessions.map((s) => ({
-    project: s.project,
-    cwd: s.cwd,
-    sessionId: s.sessionId,
-    title: s.title,
-    // resume command the brief shows verbatim
-    resumeCmd: s.cwd
-      ? `cd "${s.cwd}" && claude --resume ${s.sessionId}`
-      : `claude --resume ${s.sessionId}`,
-    lastActivityISO: s.lastActivityISO,
-    userMsgs: s.userMsgs,
-    lastAssistant: s.lastAssistant,
-    _sort: s.lastActivity,
-  }));
+  let units = Array.from(groups.values())
+    .sort((a, b) => a.lastActivity - b.lastActivity)
+    .map((g) => ({
+      project: g.project,
+      cwd: g.cwd,
+      sessionId: g.sessionId,
+      title: g.title,
+      resumeCmd: g.cwd
+        ? `cd "${g.cwd}" && claude --resume ${g.sessionId}`
+        : `claude --resume ${g.sessionId}`,
+      lastActivityISO: new Date(g.lastActivity).toISOString(),
+      userMsgs: g.userMsgs.slice(0, MAX_USER_MSGS),
+      lastAssistant: g.lastAssistant.slice(-MAX_ASST_TAIL),
+      _sort: g.lastActivity,
+    }));
 
   // enforce a rough total budget (keep the newest sessions if we must cut)
   let used = 0;
