@@ -1,0 +1,6 @@
+# local runtime state — contains the email webhook URL (a secret) and brief content
+state/
+# local logs
+logs/
+# macOS
+.DS_Store
