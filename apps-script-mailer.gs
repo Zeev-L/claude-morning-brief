@@ -38,8 +38,11 @@ function doPost(e) {
     var subject = data.subject || 'Morning Brief';
     var body = data.body || '(empty)';
     diag.to = to;
+    diag.hasHtml = !!data.htmlBody;
 
-    GmailApp.sendEmail(to, subject, body);
+    var options = {};
+    if (data.htmlBody) options.htmlBody = data.htmlBody;
+    GmailApp.sendEmail(to, subject, body, options);
     diag.sent = true;
 
     PropertiesService.getScriptProperties().setProperty('lastDiag', JSON.stringify(diag));

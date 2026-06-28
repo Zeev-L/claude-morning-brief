@@ -2,45 +2,48 @@
 
 A daily "where did I leave off?" briefing for people who run **many parallel Claude Code
 sessions**. Every weekday morning it reads your recent session transcripts, summarizes what
-you did, where you stopped, and the likely next step — then drops a short brief on your
-Desktop (and optionally emails it to you).
+you did, where you stopped, and the likely next step — then emails you a clean newsletter
+(and drops the same HTML on your Desktop).
 
 Built to solve a specific pain: after a long day — or an Israeli Thu-evening→Sun-morning
 weekend — it takes ages to remember what each of your half-finished sessions was even about.
 
 ## What you get
 
-A Markdown brief, one section per session, **ordered oldest → newest**:
+A modern **HTML newsletter**, one card per session, **ordered oldest → newest**. Each card:
 
-```
-### <topic of the session>
-- מה נעשה:      what got done
-- נקודת עצירה:   where it stopped
-- הצעד הבא:      the natural next step
-- ▶ להמשך:       cd "<project>" && claude --resume <session-id>
-```
-
-That last line is a one-paste command to **resume that exact session** where you left off.
+- **Title = the session's real Claude name** (the sidebar title); falls back to a short
+  inferred topic when a session was never named.
+- **מה נעשה** (what got done) · **נקודת עצירה** (where it stopped) · **הצעד הבא** (next step).
+- A **▶ פתח את הסשן** button that resumes that exact session in Terminal (via the
+  `claudemb://` URL-scheme handler), plus the `claude --resume` command as copyable text
+  (for email clients that strip custom-scheme links).
 
 If you didn't work since the last brief, you still get one — it notes the **last working
-date** and re-shows the previous stop-point / next-step, so you always have your bearings.
+date** and re-shows the previous cards, so you always have your bearings.
 
 ## How it works
 
 ```
 launchd (Sun–Thu 07:33)
    └─ run.sh
-        ├─ gather.js        scan ~/.claude/projects/**/*.jsonl since the last brief  (ground truth)
-        ├─ claude -p        summarize into the brief (Sonnet)
-        ├─ write .md        → ~/Desktop/Morning Briefs/brief-YYYY-MM-DD.md   ← guaranteed
+        ├─ gather.js        scan ~/.claude/projects/**/*.jsonl since the last brief  (ground truth,
+        │                   incl. each session's Claude title from its custom-title records)
+        ├─ claude -p        summarize each session → strict JSON (did / stopped / next)
+        ├─ render.js        join + render a modern HTML newsletter (+ plain-text fallback)
+        ├─ write .html      → ~/Desktop/Morning Briefs/brief-YYYY-MM-DD.html   ← guaranteed
         ├─ notify + open
-        └─ POST to webhook  → email via Apps Script  (best-effort)
+        └─ POST to webhook  → HTML email via Apps Script  (best-effort)
 ```
 
 - **Scheduler is `launchd`, not Claude's `CronCreate`** — CronCreate only fires while a Claude
   session is open and idle. launchd runs even with nothing open (and on wake if the Mac slept).
-- **State**: `state/last-brief.txt` is the "since" marker; `state/last-real-brief.md` is kept so
-  idle days can re-show your last real stop-point.
+- **State**: `state/last-brief.txt` is the "since" marker; `state/last-material.json` +
+  `state/last-summary.json` are kept so idle days can re-render your last real brief.
+- **Resume links**: the HTML uses a `claudemb://resume?id=…&cwd=…` scheme handled by a tiny
+  AppleScript app (`ClaudeResume.app`, built by `install.sh` from `claude-resume-handler.applescript`).
+  First click asks macOS to allow Terminal automation — a one-time grant. Custom-scheme links
+  don't fire inside Gmail, so the email also shows the command as copyable text.
 
 ## Email delivery — why Apps Script, not the Gmail connector
 
@@ -73,8 +76,10 @@ content).
 
 | file | role |
 |------|------|
-| `gather.js` | deterministic transcript scanner (no model, no network) |
-| `run.sh` | orchestrator: gather → summarize → write → notify → email |
+| `gather.js` | deterministic transcript scanner — pulls activity + session titles (no model, no network) |
+| `render.js` | renders the HTML newsletter + plain-text fallback from (material + summary) |
+| `run.sh` | orchestrator: gather → summarize (JSON) → render → write → notify → email |
 | `com.zeev.morning-brief.plist` | launchd schedule (Sun–Thu 07:33) |
-| `apps-script-mailer.gs` | Gmail web-app mailer (deploy separately) |
-| `install.sh` | one-shot setup / restore |
+| `apps-script-mailer.gs` | Gmail web-app mailer, sends `htmlBody` (deploy separately) |
+| `claude-resume-handler.applescript` | source for the `claudemb://` resume handler app |
+| `install.sh` | one-shot setup / restore (dirs, launchd job, resume handler) |

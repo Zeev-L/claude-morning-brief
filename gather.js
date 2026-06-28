@@ -99,6 +99,7 @@ function main() {
 
       let cwd = null;
       let sessionLast = 0;
+      let title = null;          // the session's Claude title (sidebar name)
       const userMsgs = [];
       const asstMsgs = [];
 
@@ -107,6 +108,7 @@ function main() {
         let o;
         try { o = JSON.parse(line); } catch (_) { continue; }
         if (o.cwd && !cwd) cwd = o.cwd;
+        if (o.type === "custom-title" && o.customTitle) title = o.customTitle; // last wins
         const ts = o.timestamp ? Date.parse(o.timestamp) : NaN;
         if (!Number.isNaN(ts)) {
           if (ts > sessionLast) sessionLast = ts;
@@ -131,6 +133,7 @@ function main() {
         project: cleanProjectName(dir, cwd),
         cwd: cwd || null,
         sessionId: file.replace(/\.jsonl$/, ""),
+        title: title,
         lastActivity: sessionLast,
         lastActivityISO: new Date(sessionLast).toISOString(),
         userMsgs: userMsgs.slice(0, MAX_USER_MSGS),
@@ -149,6 +152,7 @@ function main() {
     project: s.project,
     cwd: s.cwd,
     sessionId: s.sessionId,
+    title: s.title,
     // resume command the brief shows verbatim
     resumeCmd: s.cwd
       ? `cd "${s.cwd}" && claude --resume ${s.sessionId}`

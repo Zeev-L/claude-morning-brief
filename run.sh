@@ -41,7 +41,12 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$RUN_LOG"; }
 
 TODAY="$(date '+%Y-%m-%d')"
 TODAY_HUMAN="$(date '+%A, %d %b %Y')"
-BRIEF_FILE="$OUT_DIR/brief-$TODAY.md"
+BRIEF_FILE="$OUT_DIR/brief-$TODAY.html"
+TEXT_FILE="$(mktemp /tmp/mb-text.XXXXXX.txt)"
+SUMMARY="$(mktemp /tmp/mb-summary.XXXXXX.json)"
+RENDER_JSON="$(mktemp /tmp/mb-render.XXXXXX.json)"
+LAST_MATERIAL="$STATE/last-material.json"
+LAST_SUMMARY="$STATE/last-summary.json"
 
 log "=== run start ($TODAY_HUMAN) ==="
 
@@ -56,70 +61,52 @@ HAS_ACTIVITY="$("$NODE_BIN" -e 'console.log(require(process.argv[1]).hasActivity
 LAST_ACTIVITY_ISO="$("$NODE_BIN" -e 'console.log(require(process.argv[1]).lastActivityISO||"")' "$MATERIAL")"
 log "hasActivity=$HAS_ACTIVITY lastActivity=$LAST_ACTIVITY_ISO"
 
-# --- 2/3. build the brief -----------------------------------------------------
+# --- 2. summarize (structured JSON, one object per session) -------------------
 if [ "$HAS_ACTIVITY" = "true" ]; then
-  INSTRUCTION='אתה כותב "בריף בוקר" קצר וענייני לזאב, שמזכיר לו מה הוא עשה ואיפה עצר בסשנים של Claude Code.
-קיבלת בסוף ההודעה JSON עם השדה sessions — מערך סשנים שכבר ממוין מהישן לחדש. כל סשן כולל: userMsgs (מה זאב ביקש), lastAssistant (איך זה הסתיים), ו-resumeCmd (פקודה לחזרה לאותו סשן).
+  INSTRUCTION='אתה מסכם לזאב את הסשנים שלו ב-Claude Code לצורך "בריף בוקר".
+בסוף ההודעה יש JSON עם השדה sessions — מערך סשנים ממוין מהישן לחדש. לכל סשן יש sessionId, title (שם הסשן בקלוד), userMsgs (מה זאב ביקש) ו-lastAssistant (איך הסתיים).
 
-כתוב בעברית, Markdown נקי. הפק סעיף אחד לכל סשן, **בדיוק באותו סדר שהם מופיעים במערך** (מהישן לחדש). תן לכל סעיף כותרת לפי הנושא האמיתי של הסשן (לא שם התיקייה). מבנה כל סעיף:
-### <כותרת הנושא של הסשן>
-- **מה נעשה:** 1–3 נקודות תמציתיות.
-- **נקודת עצירה:** איפה זה נעצר, לפי ההודעות האחרונות.
-- **הצעד הבא:** הסק מההקשר מה ההמשך הטבעי. אם באמת לא ברור — כתוב "לא ברור, החלט כשתחזור".
-- **▶ להמשך:** `<העתק לכאן בדיוק את הערך של resumeCmd של אותו סשן, ללא שינוי>`
+החזר אך ורק JSON תקין — בלי טקסט נוסף ובלי גדרות ```. מערך אובייקטים, אחד לכל סשן, באותו סדר בדיוק. כל אובייקט:
+{"sessionId":"<מתוך הקלט>","title":"<כותרת נושא קצרה (2-5 מילים) שתשמש רק אם לסשן אין שם>","did":["1-3 נקודות קצרות בעברית של מה נעשה"],"stopped":"משפט אחד: נקודת העצירה","next":"משפט אחד: הצעד הבא (הסק מההקשר; אם לא ברור כתוב: לא ברור, החלט כשתחזור)"}
 
-כללים: היה תמציתי מאוד. בלי הקדמות, בלי "הנה הבריף". התחל ישר בתוכן. אל תמציא — הסתמך אך ורק על ה-JSON. את resumeCmd העתק מילה במילה (אל תשנה path או id). שמור על סדר הסשנים. אם סשן ממש שולי (הודעה אחת חסרת משמעות) — דלג עליו.
+כללים: עברית, תמציתי מאוד, ענייני. הסתמך אך ורק על userMsgs ו-lastAssistant של אותו סשן. אל תמציא. החזר רק את ה-JSON.
 
 להלן ה-JSON:'
-
   PROMPT="$INSTRUCTION
 $(cat "$MATERIAL")"
-
-  log "calling claude -p (summarize)..."
-  BODY="$("$CLAUDE_BIN" -p "$PROMPT" --model "$MODEL" 2>>"$RUN_LOG")"
-  if [ -z "$BODY" ]; then
+  log "calling claude -p (summarize -> JSON)..."
+  "$CLAUDE_BIN" -p "$PROMPT" --model "$MODEL" > "$SUMMARY" 2>>"$RUN_LOG"
+  if [ ! -s "$SUMMARY" ]; then
     log "ERROR: empty summary from claude; falling back to idle brief"
     HAS_ACTIVITY="false"
   fi
 fi
 
+# --- 3. render the HTML newsletter (+ plain-text fallback) --------------------
 if [ "$HAS_ACTIVITY" = "true" ]; then
-  # real brief
-  {
-    echo "# בריף בוקר — $TODAY_HUMAN"
-    echo ""
-    echo "_סיכום הפעילות בסשנים שלך מאז הבריף הקודם._"
-    echo ""
-    echo "$BODY"
-  } > "$BRIEF_FILE"
-  # save as the last real brief for future idle days
-  cp "$BRIEF_FILE" "$LAST_REAL"
-  echo "$TODAY_HUMAN" > "$LAST_REAL_DATE"
-  log "wrote real brief -> $BRIEF_FILE"
-else
-  # idle brief: no new activity. Note last working date + re-show last stop-point.
-  LAST_WORK_DATE="לא ידוע"
-  if [ -n "$LAST_ACTIVITY_ISO" ]; then
-    LAST_WORK_DATE="$(echo "$LAST_ACTIVITY_ISO" | cut -dT -f1)"
+  if "$NODE_BIN" "$BASE/render.js" "$MATERIAL" "$SUMMARY" "$TODAY_HUMAN" > "$RENDER_JSON" 2>>"$RUN_LOG" && [ -s "$RENDER_JSON" ]; then
+    "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE"
+    # remember this brief so idle days can re-show it
+    cp "$MATERIAL" "$LAST_MATERIAL"; cp "$SUMMARY" "$LAST_SUMMARY"; echo "$TODAY_HUMAN" > "$LAST_REAL_DATE"
+    log "wrote HTML brief -> $BRIEF_FILE"
+  else
+    log "ERROR: render failed; falling back to idle"
+    HAS_ACTIVITY="false"
   fi
-  {
-    echo "# בריף בוקר — $TODAY_HUMAN"
-    echo ""
-    echo "**אין פעילות חדשה מאז הבריף הקודם.**"
-    echo "תאריך העבודה האחרון שנרשם: **$LAST_WORK_DATE**."
-    echo ""
-    if [ -f "$LAST_REAL" ]; then
-      echo "להלן נקודת העצירה והצעד הבא מהבריף האחרון:"
-      echo ""
-      echo "---"
-      echo ""
-      # strip the old H1 title line from the saved brief, keep the body
-      tail -n +2 "$LAST_REAL"
-    else
-      echo "_אין בריף קודם שמור עדיין._"
-    fi
-  } > "$BRIEF_FILE"
-  log "wrote idle brief -> $BRIEF_FILE"
+fi
+
+if [ "$HAS_ACTIVITY" != "true" ]; then
+  # idle: no new activity — re-show the last real brief with a banner.
+  LAST_WORK_DATE="לא ידוע"; [ -n "$LAST_ACTIVITY_ISO" ] && LAST_WORK_DATE="$(echo "$LAST_ACTIVITY_ISO" | cut -dT -f1)"
+  BANNER="אין פעילות חדשה מאז הבריף הקודם. תאריך העבודה האחרון שנרשם: $LAST_WORK_DATE."
+  if [ -f "$LAST_MATERIAL" ] && [ -f "$LAST_SUMMARY" ]; then
+    "$NODE_BIN" "$BASE/render.js" "$LAST_MATERIAL" "$LAST_SUMMARY" "$TODAY_HUMAN" "$BANNER" > "$RENDER_JSON" 2>>"$RUN_LOG"
+  else
+    echo '{"sessions":[]}' > /tmp/mb-empty.json
+    "$NODE_BIN" "$BASE/render.js" /tmp/mb-empty.json /tmp/mb-empty.json "$TODAY_HUMAN" "$BANNER" > "$RENDER_JSON" 2>>"$RUN_LOG"
+  fi
+  "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE"
+  log "wrote idle HTML brief -> $BRIEF_FILE"
 fi
 
 # --- 4. notify + open ---------------------------------------------------------
@@ -147,11 +134,12 @@ if [ -f "$WEBHOOK_FILE" ] && [ -s "$WEBHOOK_FILE" ]; then
     -H 'Content-Type: application/json' \
     --data "$("$NODE_BIN" -e '
       const fs=require("fs");
-      const body=fs.readFileSync(process.argv[1],"utf8");
-      const payload={subject:"Morning Brief — "+process.argv[2], body};
-      if(process.argv[3]) payload.to=process.argv[3];
+      const html=fs.readFileSync(process.argv[1],"utf8");
+      const text=fs.readFileSync(process.argv[2],"utf8");
+      const payload={subject:"Morning Brief — "+process.argv[3], htmlBody:html, body:text};
+      if(process.argv[4]) payload.to=process.argv[4];
       process.stdout.write(JSON.stringify(payload));
-    ' "$BRIEF_FILE" "$TODAY" "$EMAIL_TO")" 2>>"$RUN_LOG")" || true
+    ' "$BRIEF_FILE" "$TEXT_FILE" "$TODAY" "$EMAIL_TO")" 2>>"$RUN_LOG")" || true
   case "$HTTP_CODE" in
     302|200) log "email sent via webhook (http $HTTP_CODE)" ;;
     *)       log "WARN: webhook returned http ${HTTP_CODE:-<none>} (email may not have sent; .md is on Desktop)" ;;
@@ -165,5 +153,5 @@ fi
 "$NODE_BIN" -e 'console.log(require(process.argv[1]).now)' "$MATERIAL" > "$MARKER"
 log "marker advanced -> $(cat "$MARKER")"
 
-rm -f "$MATERIAL"
+rm -f "$MATERIAL" "$TEXT_FILE" "$SUMMARY" "$RENDER_JSON"
 log "=== run done ==="

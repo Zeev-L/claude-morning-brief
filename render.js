@@ -1,0 +1,128 @@
+#!/usr/bin/env node
+/**
+ * render.js — turn (gather material + LLM summary) into a modern HTML newsletter.
+ *
+ *   node render.js <material.json> <summary.json> "<date-human>"
+ *
+ * Prints JSON to stdout: { html, text }
+ *  - html: a clean, RTL, inline-styled newsletter (used as the email htmlBody
+ *          AND saved as a .html on the Desktop)
+ *  - text: a plain-text fallback for the email
+ *
+ * Section title = the session's real Claude name (material.title). Each card has
+ * a one-click "open the session" link via the claudemb:// scheme handler, plus
+ * the resume command as copyable text (for email clients that strip custom links).
+ */
+const fs = require("fs");
+
+const material = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+let summary = [];
+try {
+  let raw = fs.readFileSync(process.argv[3], "utf8").trim();
+  raw = raw.replace(/^```(json)?/i, "").replace(/```$/, "").trim();
+  summary = JSON.parse(raw);
+} catch (_) { summary = []; }
+const dateHuman = process.argv[4] || "";
+const bannerText = process.argv[5] || ""; // shown on idle days
+
+const esc = (s) => String(s == null ? "" : s)
+  .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+const byId = {};
+summary.forEach((x) => { if (x && x.sessionId) byId[x.sessionId] = x; });
+
+// palette
+const C = {
+  bg: "#f4f5f7", card: "#ffffff", ink: "#1f2329", sub: "#6b7280",
+  line: "#e5e7eb", accent: "#4f46e5", code: "#f3f4f6", codeInk: "#374151",
+};
+
+function resumeLink(s) {
+  const q = "id=" + encodeURIComponent(s.sessionId) + "&cwd=" + encodeURIComponent(s.cwd || "");
+  return "claudemb://resume?" + q;
+}
+
+function card(s) {
+  const sum = byId[s.sessionId] || {};
+  const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
+  const did = Array.isArray(sum.did) ? sum.did : (sum.did ? [sum.did] : []);
+  const stopped = sum.stopped || "";
+  const next = sum.next || "";
+  const when = s.lastActivityISO ? s.lastActivityISO.slice(0, 16).replace("T", " ") : "";
+  const proj = s.project || "";
+
+  const didHtml = did.length
+    ? `<ul style="margin:6px 0 0;padding-inline-start:18px;color:${C.ink};font-size:14px;line-height:1.6;">`
+      + did.map((d) => `<li>${esc(d)}</li>`).join("") + `</ul>`
+    : "";
+
+  const row = (label, val) => val
+    ? `<div style="margin-top:10px;font-size:14px;line-height:1.6;">
+         <span style="color:${C.sub};font-weight:600;">${label}</span>
+         <span style="color:${C.ink};"> ${esc(val)}</span>
+       </div>` : "";
+
+  return `
+  <tr><td style="padding:0 0 16px;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.card};border:1px solid ${C.line};border-radius:14px;">
+      <tr><td style="padding:18px 20px;">
+        <div style="font-size:12px;color:${C.sub};margin-bottom:2px;">${esc(proj)}${when ? " · " + esc(when) : ""}</div>
+        <div style="font-size:18px;font-weight:700;color:${C.ink};line-height:1.3;">${esc(title)}</div>
+        ${did.length ? `<div style="margin-top:12px;"><span style="color:${C.sub};font-weight:600;font-size:14px;">מה נעשה</span>${didHtml}</div>` : ""}
+        ${row("נקודת עצירה:", stopped)}
+        ${row("הצעד הבא:", next)}
+        <div style="margin-top:16px;">
+          <a href="${resumeLink(s)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן</a>
+        </div>
+        <div style="margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:${C.codeInk};background:${C.code};border-radius:6px;padding:6px 8px;direction:ltr;text-align:left;word-break:break-all;">${esc(s.resumeCmd)}</div>
+      </td></tr>
+    </table>
+  </td></tr>`;
+}
+
+function shell(inner, intro) {
+  return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:${C.bg};">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:${C.bg};padding:24px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
+      <tr><td style="padding:0 4px 18px;">
+        <div style="font-size:13px;color:${C.accent};font-weight:700;letter-spacing:.4px;">☀️ MORNING BRIEF</div>
+        <div style="font-size:22px;font-weight:800;color:${C.ink};margin-top:2px;">${esc(dateHuman)}</div>
+        <div style="font-size:13px;color:${C.sub};margin-top:4px;">${intro}</div>
+      </td></tr>
+      ${bannerText ? `<tr><td style="padding:0 4px 16px;"><div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:11px 14px;font-size:14px;line-height:1.5;">${esc(bannerText)}</div></td></tr>` : ""}
+      ${inner || `<tr><td style="padding:0 4px;"><div style="color:${C.sub};font-size:14px;">אין מה להציג עדיין.</div></td></tr>`}
+      <tr><td style="padding:8px 4px 0;">
+        <div style="font-size:11px;color:${C.sub};border-top:1px solid ${C.line};padding-top:12px;">
+          נוצר אוטומטית מהסשנים שלך ב-Claude Code · הכפתורים פותחים את הסשן בטרמינל.
+        </div>
+      </td></tr>
+    </table>
+  </td></tr>
+</table></body></html>`;
+}
+
+function textVersion(sessions) {
+  let out = `בריף בוקר — ${dateHuman}\n\n`;
+  sessions.forEach((s) => {
+    const sum = byId[s.sessionId] || {};
+    const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
+    out += `■ ${title}  [${s.project || ""}]\n`;
+    const did = Array.isArray(sum.did) ? sum.did : [];
+    did.forEach((d) => { out += `   • ${d}\n`; });
+    if (sum.stopped) out += `   נקודת עצירה: ${sum.stopped}\n`;
+    if (sum.next) out += `   הצעד הבא: ${sum.next}\n`;
+    out += `   להמשך: ${s.resumeCmd}\n\n`;
+  });
+  return out;
+}
+
+const sessions = material.sessions || [];
+const intro = bannerText ? "תזכורת מהבריף האחרון." : "סיכום הפעילות שלך מאז הבריף הקודם.";
+const inner = sessions.map(card).join("");
+process.stdout.write(JSON.stringify({
+  html: shell(inner, intro),
+  text: textVersion(sessions),
+}));
