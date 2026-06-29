@@ -47,6 +47,8 @@ SUMMARY="$(mktemp /tmp/mb-summary.XXXXXX.json)"
 RENDER_JSON="$(mktemp /tmp/mb-render.XXXXXX.json)"
 LAST_MATERIAL="$STATE/last-material.json"
 LAST_SUMMARY="$STATE/last-summary.json"
+# webhook /exec URL — also used for the "open Claude app" bounce link in the brief
+MB_EXEC=""; [ -f "$STATE/email-webhook.txt" ] && MB_EXEC="$(tr -d '[:space:]' < "$STATE/email-webhook.txt")"
 
 log "=== run start ($TODAY_HUMAN) ==="
 
@@ -84,7 +86,7 @@ fi
 
 # --- 3. render the HTML newsletter (+ plain-text fallback) --------------------
 if [ "$HAS_ACTIVITY" = "true" ]; then
-  if "$NODE_BIN" "$BASE/render.js" "$MATERIAL" "$SUMMARY" "$TODAY_HUMAN" > "$RENDER_JSON" 2>>"$RUN_LOG" && [ -s "$RENDER_JSON" ]; then
+  if "$NODE_BIN" "$BASE/render.js" "$MATERIAL" "$SUMMARY" "$TODAY_HUMAN" "" "$MB_EXEC" > "$RENDER_JSON" 2>>"$RUN_LOG" && [ -s "$RENDER_JSON" ]; then
     "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE"
     # remember this brief so idle days can re-show it
     cp "$MATERIAL" "$LAST_MATERIAL"; cp "$SUMMARY" "$LAST_SUMMARY"; echo "$TODAY_HUMAN" > "$LAST_REAL_DATE"
@@ -100,10 +102,10 @@ if [ "$HAS_ACTIVITY" != "true" ]; then
   LAST_WORK_DATE="לא ידוע"; [ -n "$LAST_ACTIVITY_ISO" ] && LAST_WORK_DATE="$(echo "$LAST_ACTIVITY_ISO" | cut -dT -f1)"
   BANNER="אין פעילות חדשה מאז הבריף הקודם. תאריך העבודה האחרון שנרשם: $LAST_WORK_DATE."
   if [ -f "$LAST_MATERIAL" ] && [ -f "$LAST_SUMMARY" ]; then
-    "$NODE_BIN" "$BASE/render.js" "$LAST_MATERIAL" "$LAST_SUMMARY" "$TODAY_HUMAN" "$BANNER" > "$RENDER_JSON" 2>>"$RUN_LOG"
+    "$NODE_BIN" "$BASE/render.js" "$LAST_MATERIAL" "$LAST_SUMMARY" "$TODAY_HUMAN" "$BANNER" "$MB_EXEC" > "$RENDER_JSON" 2>>"$RUN_LOG"
   else
     echo '{"sessions":[]}' > /tmp/mb-empty.json
-    "$NODE_BIN" "$BASE/render.js" /tmp/mb-empty.json /tmp/mb-empty.json "$TODAY_HUMAN" "$BANNER" > "$RENDER_JSON" 2>>"$RUN_LOG"
+    "$NODE_BIN" "$BASE/render.js" /tmp/mb-empty.json /tmp/mb-empty.json "$TODAY_HUMAN" "$BANNER" "$MB_EXEC" > "$RENDER_JSON" 2>>"$RUN_LOG"
   fi
   "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE"
   log "wrote idle HTML brief -> $BRIEF_FILE"

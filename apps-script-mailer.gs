@@ -59,5 +59,26 @@ function doGet(e) {
     var d = PropertiesService.getScriptProperties().getProperty('lastDiag') || '{}';
     return json({ lastDiag: JSON.parse(d) });
   }
+  // bounce page: https link (clickable in Gmail) -> redirects to claude:// (opens
+  // the desktop app). Optional ?session= for a future per-session deep link.
+  if (e && e.parameter && e.parameter.open) {
+    var scheme = 'claude://';
+    var html =
+      '<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8">' +
+      '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+      '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;' +
+      'text-align:center;padding:54px 20px;background:#f4f5f7;color:#1f2329}' +
+      '.b{display:inline-block;background:#1f2329;color:#fff;text-decoration:none;font-size:16px;' +
+      'font-weight:600;padding:14px 24px;border-radius:10px;margin-top:18px}' +
+      '.s{color:#6b7280;font-size:13px;margin-top:14px}</style></head><body>' +
+      '<div style="font-size:19px;font-weight:700">פותח את אפליקציית Claude…</div>' +
+      '<a class="b" href="' + scheme + '">↗ פתח את Claude</a>' +
+      '<div class="s">אם לא נפתח לבד — לחץ על הכפתור.</div>' +
+      '<script>setTimeout(function(){try{top.location.href="' + scheme + '"}catch(e){location.href="' + scheme + '"}},250);</script>' +
+      '</body></html>';
+    return HtmlService.createHtmlOutput(html)
+      .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
+      .setTitle('Open Claude');
+  }
   return json({ ok: true, service: 'morning-brief-mailer' });
 }

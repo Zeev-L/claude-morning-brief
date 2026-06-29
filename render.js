@@ -27,6 +27,12 @@ try {
 } catch (_) { summary = []; }
 const dateHuman = process.argv[4] || "";
 const bannerText = process.argv[5] || ""; // shown on idle days
+// "Open Claude app" button target. From email this is the https bounce
+// (clickable in Gmail) that redirects to claude://; falls back to claude://
+// directly (works from the Desktop .html) when no webhook is configured.
+const execBase = process.argv[6] || "";   // Apps Script /exec URL for the open-app bounce
+// https bounce (clickable in Gmail) → claude://; falls back to direct claude://
+const openAppHref = execBase ? (execBase + "?open=1") : "claude://";
 
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -96,7 +102,7 @@ function shell(inner, intro) {
         <div style="font-size:22px;font-weight:800;color:${C.ink};margin-top:2px;">${esc(dateHuman)}</div>
         <div style="font-size:13px;color:${C.sub};margin-top:4px;">${intro}</div>
         <div style="margin-top:12px;">
-          <a href="claude://" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">↗ פתח את אפליקציית Claude</a>
+          <a href="${openAppHref}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">↗ פתח את אפליקציית Claude</a>
         </div>
       </td></tr>
       ${bannerText ? `<tr><td style="padding:0 4px 16px;"><div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:11px 14px;font-size:14px;line-height:1.5;">${esc(bannerText)}</div></td></tr>` : ""}
