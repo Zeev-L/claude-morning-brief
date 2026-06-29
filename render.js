@@ -95,6 +95,9 @@ function shell(inner, intro) {
         <div style="font-size:13px;color:${C.accent};font-weight:700;letter-spacing:.4px;">☀️ MORNING BRIEF</div>
         <div style="font-size:22px;font-weight:800;color:${C.ink};margin-top:2px;">${esc(dateHuman)}</div>
         <div style="font-size:13px;color:${C.sub};margin-top:4px;">${intro}</div>
+        <div style="margin-top:12px;">
+          <a href="claude://" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">↗ פתח את אפליקציית Claude</a>
+        </div>
       </td></tr>
       ${bannerText ? `<tr><td style="padding:0 4px 16px;"><div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:11px 14px;font-size:14px;line-height:1.5;">${esc(bannerText)}</div></td></tr>` : ""}
       ${inner || `<tr><td style="padding:0 4px;"><div style="color:${C.sub};font-size:14px;">אין מה להציג עדיין.</div></td></tr>`}
