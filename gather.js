@@ -185,7 +185,7 @@ function main() {
   }
 
   let units = Array.from(groups.values())
-    .sort((a, b) => a.lastActivity - b.lastActivity)
+    .sort((a, b) => b.lastActivity - a.lastActivity)   // newest first (closest to send time)
     .map((g) => ({
       project: g.project,
       cwd: g.cwd,
@@ -200,14 +200,15 @@ function main() {
       _sort: g.lastActivity,
     }));
 
-  // enforce a rough total budget (keep the newest sessions if we must cut)
+  // enforce a rough total budget — units are newest-first, so iterate forward
+  // and drop the oldest if we run over.
   let used = 0;
   const kept = [];
-  for (let i = units.length - 1; i >= 0; i--) {
+  for (let i = 0; i < units.length; i++) {
     const size = JSON.stringify(units[i]).length;
     if (used + size > TOTAL_BUDGET && kept.length > 0) break;
     used += size;
-    kept.unshift(units[i]);
+    kept.push(units[i]);
   }
   kept.forEach((u) => delete u._sort);
 
