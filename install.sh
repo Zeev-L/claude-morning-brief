@@ -11,26 +11,9 @@ echo "→ creating local dirs (state, logs, Desktop output)…"
 mkdir -p "$BASE/state" "$BASE/logs" "$HOME/Desktop/Morning Briefs"
 
 echo "→ chmod scripts…"
-chmod +x "$BASE/run.sh" "$BASE/gather.js" "$BASE/render.js" "$BASE/resume.sh" "$BASE/install.sh" 2>/dev/null || true
-
-echo "→ building + registering the claudemb:// resume handler…"
-# A tiny AppleScript app that handles claudemb://resume?id=..&cwd=.. links from
-# the HTML brief and opens that Claude Code session in Terminal.
-APP="$BASE/ClaudeResume.app"; PL="$APP/Contents/Info.plist"
-rm -rf "$APP"
-if osacompile -l AppleScript -o "$APP" "$BASE/claude-resume-handler.applescript" 2>/dev/null; then
-  /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.zeev.clauderesume" "$PL" 2>/dev/null \
-    || /usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.zeev.clauderesume" "$PL"
-  /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes array" "$PL" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0 dict" "$PL" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLName string com.zeev.clauderesume" "$PL" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes array" "$PL" 2>/dev/null || true
-  /usr/libexec/PlistBuddy -c "Add :CFBundleURLTypes:0:CFBundleURLSchemes:0 string claudemb" "$PL" 2>/dev/null || true
-  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" \
-    && echo "  ✓ claudemb:// handler registered (first click will ask to allow Terminal automation)"
-else
-  echo "  ! could not build the resume handler (resume links will still show as copyable commands)"
-fi
+chmod +x "$BASE/run.sh" "$BASE/gather.js" "$BASE/render.js" "$BASE/install.sh" 2>/dev/null || true
+# Resume links use the native claude://resume?session= scheme (handled by the
+# Claude desktop app) — no custom handler to build.
 
 echo "→ installing launchd job (Sun–Thu 07:33)…"
 # NOTE: the plist has hardcoded /Users paths; if your username differs, edit it first.

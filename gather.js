@@ -102,6 +102,7 @@ function main() {
       let title = null;          // the session's Claude title (sidebar name)
       let isInteractive = false; // real interactive session? (vs. a headless `claude -p` call)
       let realUserTotal = 0;     // human prompts across the whole transcript (not just since)
+      let rootUuid = null;       // uuid of the first user msg = the conversation root
       const userMsgs = [];
       const asstMsgs = [];
 
@@ -115,6 +116,7 @@ function main() {
         // calls (the tool's own summarizer/mailer invocations) do NOT.
         if (o.type === "system" || o.type === "mode") isInteractive = true;
         if (o.type === "user" && o.message) {
+          if (!rootUuid && o.uuid) rootUuid = o.uuid; // shared across split/resumed transcripts
           const tt = extractText(o.message.content);
           if (!isNoise(tt)) realUserTotal++;
         }
@@ -144,6 +146,7 @@ function main() {
         project: cleanProjectName(dir, cwd),
         cwd: cwd || null,
         sessionId: file.replace(/\.jsonl$/, ""),
+        rootUuid: rootUuid,
         title: title,
         lastActivity: sessionLast,
         lastActivityISO: new Date(sessionLast).toISOString(),
@@ -161,7 +164,11 @@ function main() {
   sessions.sort((a, b) => a.lastActivity - b.lastActivity);
   const groups = new Map();
   for (const s of sessions) {
-    const key = (s.title && s.title.trim()) ? "t:" + s.title.trim() : "s:" + s.sessionId;
+    // same conversation across split/resumed transcripts shares the root uuid;
+    // fall back to title, then to the session id.
+    const key = s.rootUuid ? "r:" + s.rootUuid
+      : (s.title && s.title.trim()) ? "t:" + s.title.trim()
+      : "s:" + s.sessionId;
     if (!groups.has(key)) {
       groups.set(key, {
         project: s.project, cwd: s.cwd, sessionId: s.sessionId, title: s.title,
@@ -169,6 +176,7 @@ function main() {
       });
     }
     const g = groups.get(key);
+    if (s.title && s.title.trim()) g.title = s.title; // prefer a real Claude title over none
     if (s.lastActivity >= g.lastActivity) { // newest transcript wins for resume + project
       g.lastActivity = s.lastActivity; g.sessionId = s.sessionId; g.cwd = s.cwd || g.cwd; g.project = s.project;
     }

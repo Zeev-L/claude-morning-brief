@@ -41,8 +41,9 @@ const C = {
 };
 
 function resumeLink(s) {
-  const q = "id=" + encodeURIComponent(s.sessionId) + "&cwd=" + encodeURIComponent(s.cwd || "");
-  return "claudemb://resume?" + q;
+  // native Claude desktop-app deep link — opens that Claude Code session
+  // in the app where the user actually works.
+  return "claude://resume?session=" + encodeURIComponent(s.sessionId);
 }
 
 function card(s, i) {
@@ -76,9 +77,9 @@ function card(s, i) {
         ${row("נקודת עצירה:", stopped)}
         ${row("הצעד הבא:", next)}
         <div style="margin-top:16px;">
-          <a href="${resumeLink(s)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן</a>
+          <a href="${resumeLink(s)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן באפליקציה</a>
         </div>
-        <div style="margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:${C.codeInk};background:${C.code};border-radius:6px;padding:6px 8px;direction:ltr;text-align:left;word-break:break-all;">${esc(s.resumeCmd)}</div>
+        <div style="margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:${C.codeInk};background:${C.code};border-radius:6px;padding:6px 8px;direction:ltr;text-align:left;word-break:break-all;">${esc(resumeLink(s))}</div>
       </td></tr>
     </table>
   </td></tr>`;
@@ -100,7 +101,7 @@ function shell(inner, intro) {
       ${inner || `<tr><td style="padding:0 4px;"><div style="color:${C.sub};font-size:14px;">אין מה להציג עדיין.</div></td></tr>`}
       <tr><td style="padding:8px 4px 0;">
         <div style="font-size:11px;color:${C.sub};border-top:1px solid ${C.line};padding-top:12px;">
-          נוצר אוטומטית מהסשנים שלך ב-Claude Code · הכפתורים פותחים את הסשן בטרמינל.
+          נוצר אוטומטית מהסשנים שלך ב-Claude Code · הכפתורים פותחים את הסשן באפליקציית הדסקטופ.
         </div>
       </td></tr>
     </table>
@@ -118,7 +119,7 @@ function textVersion(sessions) {
     did.forEach((d) => { out += `   • ${d}\n`; });
     if (sum.stopped) out += `   נקודת עצירה: ${sum.stopped}\n`;
     if (sum.next) out += `   הצעד הבא: ${sum.next}\n`;
-    out += `   להמשך: ${s.resumeCmd}\n\n`;
+    out += `   פתח: ${resumeLink(s)}\n\n`;
   });
   return out;
 }

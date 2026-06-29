@@ -2,7 +2,5 @@
 state/
 # local logs
 logs/
-# built URL-scheme handler app (rebuilt by install.sh from the .applescript source)
-ClaudeResume.app/
 # macOS
 .DS_Store
