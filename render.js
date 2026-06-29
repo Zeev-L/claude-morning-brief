@@ -40,11 +40,11 @@ const C = {
   line: "#e5e7eb", accent: "#4f46e5", code: "#f3f4f6", codeInk: "#374151",
 };
 
-function resumeLink(s) {
-  // native Claude desktop-app deep link — opens that Claude Code session
-  // in the app where the user actually works.
-  return "claude://resume?session=" + encodeURIComponent(s.sessionId);
-}
+// NOTE: there is no reliable deep link to open an existing *local* Claude Code
+// session in the desktop app — `claude://resume` IMPORTS (creating duplicate
+// "General coding session" entries) and `claude://code/<id>` needs a cloud
+// `cse_/session_` id these local sessions don't have (and is feature-gated).
+// So the card title IS the exact sidebar name; you reopen it from Recents.
 
 function card(s, i) {
   // join by sessionId; fall back to position (summary is returned in input order)
@@ -76,10 +76,9 @@ function card(s, i) {
         ${did.length ? `<div style="margin-top:12px;"><span style="color:${C.sub};font-weight:600;font-size:14px;">מה נעשה</span>${didHtml}</div>` : ""}
         ${row("נקודת עצירה:", stopped)}
         ${row("הצעד הבא:", next)}
-        <div style="margin-top:16px;">
-          <a href="${resumeLink(s)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן באפליקציה</a>
+        <div style="margin-top:14px;font-size:12px;color:${C.sub};border-top:1px solid ${C.line};padding-top:10px;">
+          ↩︎ לחזרה: פתח <b style="color:${C.ink};">${esc(title)}</b> מ-Recents באפליקציה
         </div>
-        <div style="margin-top:8px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:${C.codeInk};background:${C.code};border-radius:6px;padding:6px 8px;direction:ltr;text-align:left;word-break:break-all;">${esc(resumeLink(s))}</div>
       </td></tr>
     </table>
   </td></tr>`;
@@ -101,7 +100,7 @@ function shell(inner, intro) {
       ${inner || `<tr><td style="padding:0 4px;"><div style="color:${C.sub};font-size:14px;">אין מה להציג עדיין.</div></td></tr>`}
       <tr><td style="padding:8px 4px 0;">
         <div style="font-size:11px;color:${C.sub};border-top:1px solid ${C.line};padding-top:12px;">
-          נוצר אוטומטית מהסשנים שלך ב-Claude Code · הכפתורים פותחים את הסשן באפליקציית הדסקטופ.
+          נוצר אוטומטית מהסשנים שלך ב-Claude Code · שמות הכרטיסים תואמים ל-Recents באפליקציה.
         </div>
       </td></tr>
     </table>
@@ -119,7 +118,7 @@ function textVersion(sessions) {
     did.forEach((d) => { out += `   • ${d}\n`; });
     if (sum.stopped) out += `   נקודת עצירה: ${sum.stopped}\n`;
     if (sum.next) out += `   הצעד הבא: ${sum.next}\n`;
-    out += `   פתח: ${resumeLink(s)}\n\n`;
+    out += `   לחזרה: פתח "${title}" מ-Recents באפליקציה\n\n`;
   });
   return out;
 }
