@@ -52,6 +52,23 @@ const C = {
 // `cse_/session_` id these local sessions don't have (and is feature-gated).
 // So the card title IS the exact sidebar name; you reopen it from Recents.
 
+// "▶ open session" — jumps to the real session in the desktop app via the
+// claudejump:// handler. Only when the session has a real Claude title (the
+// Recents row is matched by that title); otherwise show a Recents hint.
+function jumpRow(s) {
+  const realTitle = (s.title && s.title.trim()) ? s.title.trim() : "";
+  const foot = `margin-top:14px;border-top:1px solid ${C.line};padding-top:12px;`;
+  if (!realTitle) {
+    return `<div style="${foot}font-size:12px;color:${C.sub};">↩︎ לחזרה: פתח את הסשן מ-Recents באפליקציה</div>`;
+  }
+  const href = execBase
+    ? execBase + "?jump=" + encodeURIComponent(realTitle)
+    : "claudejump://open?title=" + encodeURIComponent(realTitle);
+  return `<div style="${foot}">
+    <a href="${esc(href)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן</a>
+  </div>`;
+}
+
 function card(s, i) {
   // join by sessionId; fall back to position (summary is returned in input order)
   const sum = byId[s.sessionId] || summary[i] || {};
@@ -82,9 +99,7 @@ function card(s, i) {
         ${did.length ? `<div style="margin-top:12px;"><span style="color:${C.sub};font-weight:600;font-size:14px;">מה נעשה</span>${didHtml}</div>` : ""}
         ${row("נקודת עצירה:", stopped)}
         ${row("הצעד הבא:", next)}
-        <div style="margin-top:14px;font-size:12px;color:${C.sub};border-top:1px solid ${C.line};padding-top:10px;">
-          ↩︎ לחזרה: פתח <b style="color:${C.ink};">${esc(title)}</b> מ-Recents באפליקציה
-        </div>
+        ${jumpRow(s)}
       </td></tr>
     </table>
   </td></tr>`;

@@ -59,10 +59,17 @@ function doGet(e) {
     var d = PropertiesService.getScriptProperties().getProperty('lastDiag') || '{}';
     return json({ lastDiag: JSON.parse(d) });
   }
-  // bounce page: https link (clickable in Gmail) -> redirects to claude:// (opens
-  // the desktop app). Optional ?session= for a future per-session deep link.
-  if (e && e.parameter && e.parameter.open) {
-    var scheme = 'claude://';
+  // bounce page: https link (clickable in Gmail) -> redirects to a custom scheme
+  // that opens the desktop app.
+  //   ?open=1        -> claude://            (just focus the app)
+  //   ?jump=<title>  -> claudejump://open?title=<title>  (jump to that session)
+  if (e && e.parameter && (e.parameter.open || e.parameter.jump)) {
+    var scheme;
+    if (e.parameter.jump) {
+      scheme = 'claudejump://open?title=' + encodeURIComponent(e.parameter.jump);
+    } else {
+      scheme = 'claude://';
+    }
     var html =
       '<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8">' +
       '<meta name="viewport" content="width=device-width,initial-scale=1">' +
