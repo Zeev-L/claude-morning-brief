@@ -52,6 +52,11 @@ const C = {
 // `cse_/session_` id these local sessions don't have (and is feature-gated).
 // So the card title IS the exact sidebar name; you reopen it from Recents.
 
+// Static https redirect page (clickable in Gmail) that bounces to the
+// claudejump:// handler instantly — no visible interstitial. Generic/no data,
+// so one public page serves everyone.
+const JUMP_REDIRECT = "https://zeev-l.github.io/claude-jump/?t=";
+
 // "▶ open session" — jumps to the real session in the desktop app via the
 // claudejump:// handler. Only when the session has a real Claude title (the
 // Recents row is matched by that title); otherwise show a Recents hint.
@@ -61,9 +66,7 @@ function jumpRow(s) {
   if (!realTitle) {
     return `<div style="${foot}font-size:12px;color:${C.sub};">↩︎ לחזרה: פתח את הסשן מ-Recents באפליקציה</div>`;
   }
-  const href = execBase
-    ? execBase + "?jump=" + encodeURIComponent(realTitle)
-    : "claudejump://open?title=" + encodeURIComponent(realTitle);
+  const href = JUMP_REDIRECT + encodeURIComponent(realTitle);
   return `<div style="${foot}">
     <a href="${esc(href)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן</a>
   </div>`;
