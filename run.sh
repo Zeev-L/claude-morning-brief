@@ -24,11 +24,13 @@ BASE="$HOME_DIR/.claude/morning-brief"
 STATE="$BASE/state"
 LOGS="$BASE/logs"
 OUT_DIR="$HOME_DIR/Desktop/Morning Briefs"
-CLAUDE_BIN="$HOME_DIR/.local/bin/claude"
-NODE_BIN="/opt/homebrew/bin/node"
 
 # launchd gives a minimal PATH; set one that finds node/claude/system tools
+# (covers Apple-Silicon + Intel Homebrew and the Claude CLI install dir)
 export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOME_DIR/.local/bin"
+# auto-detect the binaries so this is portable across machines
+NODE_BIN="$(command -v node || echo /opt/homebrew/bin/node)"
+CLAUDE_BIN="$(command -v claude || echo "$HOME_DIR/.local/bin/claude")"
 
 MARKER="$STATE/last-brief.txt"
 LAST_REAL="$STATE/last-real-brief.md"

@@ -15,10 +15,10 @@ A modern **HTML newsletter**, one card per session, **ordered oldest → newest*
 - **Title = the session's real Claude name** (the sidebar title); falls back to a short
   inferred topic when a session was never named.
 - **מה נעשה** (what got done) · **נקודת עצירה** (where it stopped) · **הצעד הבא** (next step).
-- A **▶ פתח את הסשן באפליקציה** button that reopens that exact session in the **Claude
-  desktop app** via its native `claude://resume?session=<id>` deep link — i.e. it lands you
-  back on the platform you actually work in. (Gmail strips custom-scheme links, so click
-  from the Desktop `.html`; the link is also shown as text.)
+- A **▶ פתח את הסשן** button that reopens that exact (titled) session in the **Claude
+  desktop app**, right where you left off. From the **Desktop `.html`** it's one click
+  (direct `claudejump://`); in **email** it goes via a tiny https redirect because Gmail
+  strips custom-scheme links (link → page → one click — unavoidable for email).
 
 If you didn't work since the last brief, you still get one — it notes the **last working
 date** and re-shows the previous cards, so you always have your bearings.
@@ -41,10 +41,19 @@ launchd (Sun–Thu 07:33)
   session is open and idle. launchd runs even with nothing open (and on wake if the Mac slept).
 - **State**: `state/last-brief.txt` is the "since" marker; `state/last-material.json` +
   `state/last-summary.json` are kept so idle days can re-render your last real brief.
-- **Resume links**: the HTML uses the Claude desktop app's native
-  `claude://resume?session=<id>` deep link (discovered in the app — it routes `resume` to the
-  CLI session by `session`). One click from the Desktop `.html` reopens that session in the app.
-  Gmail strips custom-scheme links, so they're clickable from the Desktop file, not inside Gmail.
+- **"Open session" jump** (the hard part): there is **no** native deep link that opens an
+  existing *local* Claude Code session (`claude://resume` IMPORTS it → duplicate empty
+  sessions; `claude://code/<id>` needs a cloud id local sessions lack + is feature-gated).
+  So the jump is **UI automation**:
+  - `ClaudeJump.app` — a thin `claudejump://` URL-scheme handler (built by `install.sh`)
+    that runs `jump.applescript`.
+  - `jump.applescript` — sets `AXManualAccessibility` to force Electron to expose its a11y
+    tree, then finds the sidebar button whose name contains the session title and presses it.
+    Fast (~1s), works across all running Claude instances. Needs a one-time **Accessibility**
+    grant to `ClaudeJump.app`.
+  - **Email** links can't use `claudejump://` (Gmail strips it), so they point at a generic
+    static redirect page (`https://zeev-l.github.io/claude-jump/?t=<title>`, repo:
+    [Zeev-L/claude-jump](https://github.com/Zeev-L/claude-jump)) that bounces to the handler.
 
 ## Email delivery — why Apps Script, not the Gmail connector
 
@@ -69,17 +78,27 @@ git clone https://github.com/Zeev-L/morning-brief ~/.claude/morning-brief
 cd ~/.claude/morning-brief && ./install.sh
 ```
 
-`install.sh` creates the local dirs, installs + loads the launchd job, and prints the email
-setup steps. `state/` and `logs/` are gitignored (they hold the webhook secret and your brief
-content).
+`install.sh` creates the local dirs, builds + registers `ClaudeJump.app`, generates +
+loads the launchd job (with this machine's paths), and prints the remaining one-time
+manual steps:
+
+1. **Email** — deploy `apps-script-mailer.gs` as a Web App (Execute as: Me, Who has access:
+   Anyone), then `echo '<exec-url>' > state/email-webhook.txt` and `echo '<you@x.com>' > state/email-to.txt`.
+2. **Jump links** — grant Accessibility to `~/Applications/ClaudeJump.app`.
+3. `./run.sh` to verify.
+
+`state/` and `logs/` are gitignored (they hold the webhook secret, recipient, and brief content).
 
 ## Files
 
 | file | role |
 |------|------|
-| `gather.js` | deterministic transcript scanner — pulls activity + session titles (no model, no network) |
-| `render.js` | renders the HTML newsletter + plain-text fallback from (material + summary) |
+| `gather.js` | deterministic transcript scanner — activity + session titles, de-noises the tool's own `claude -p` calls, merges split conversations (no model, no network) |
+| `render.js` | renders the HTML newsletter (local + email variants) + plain-text fallback |
 | `run.sh` | orchestrator: gather → summarize (JSON) → render → write → notify → email |
-| `com.zeev.morning-brief.plist` | launchd schedule (Sun–Thu 07:33) |
-| `apps-script-mailer.gs` | Gmail web-app mailer, sends `htmlBody` (deploy separately) |
-| `install.sh` | one-shot setup / restore (dirs, launchd job) |
+| `apps-script-mailer.gs` | Gmail web-app mailer (sends `htmlBody`; `?jump=`/`?open=` bounces) — deploy separately |
+| `claude-jump-shim.applescript` | source for `ClaudeJump.app` (thin `claudejump://` handler) |
+| `jump.applescript` | the AX automation that opens a session by title (editable without re-signing the app) |
+| `install.sh` | one-shot setup / restore (dirs, ClaudeJump.app, launchd job) |
+
+The email redirect page lives in a separate public repo: [Zeev-L/claude-jump](https://github.com/Zeev-L/claude-jump).

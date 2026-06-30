@@ -4,7 +4,6 @@
 set -eu
 
 BASE="$HOME/.claude/morning-brief"
-PLIST_SRC="$BASE/com.zeev.morning-brief.plist"
 PLIST_DST="$HOME/Library/LaunchAgents/com.zeev.morning-brief.plist"
 
 echo "→ creating local dirs (state, logs, Desktop output)…"
@@ -41,15 +40,43 @@ else
 fi
 
 echo "→ installing launchd job (Sun–Thu 07:33)…"
-# NOTE: the plist has hardcoded /Users paths; if your username differs, edit it first.
-cp "$PLIST_SRC" "$PLIST_DST"
+# Generate the plist with THIS machine's paths (portable across usernames).
+mkdir -p "$HOME/Library/LaunchAgents"
+cat > "$PLIST_DST" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.zeev.morning-brief</string>
+  <key>ProgramArguments</key>
+  <array><string>/bin/zsh</string><string>$BASE/run.sh</string></array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>33</integer></dict>
+    <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>33</integer></dict>
+    <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>33</integer></dict>
+    <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>33</integer></dict>
+    <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>33</integer></dict>
+  </array>
+  <key>RunAtLoad</key><false/>
+  <key>StandardOutPath</key><string>$BASE/logs/launchd.out.log</string>
+  <key>StandardErrorPath</key><string>$BASE/logs/launchd.err.log</string>
+</dict>
+</plist>
+PLIST
 launchctl unload "$PLIST_DST" 2>/dev/null || true
 launchctl load "$PLIST_DST"
 launchctl list | grep morning-brief && echo "  ✓ job loaded" || echo "  ! job not found"
 
 echo ""
-echo "Done. To enable email delivery:"
-echo "  1. Deploy apps-script-mailer.gs as a Web App (see file header for steps)."
-echo "  2. echo 'YOUR_EXEC_URL' > $BASE/state/email-webhook.txt"
-echo ""
-echo "Test now:  $BASE/run.sh"
+echo "=================== MANUAL STEPS (one-time) ==================="
+echo "1. EMAIL: deploy apps-script-mailer.gs as a Web App"
+echo "   (script.google.com → New project → paste → Deploy → Web app,"
+echo "    Execute as: Me, Who has access: Anyone → authorize → copy /exec URL):"
+echo "      echo 'YOUR_EXEC_URL'      > $BASE/state/email-webhook.txt"
+echo "      echo 'you@example.com'    > $BASE/state/email-to.txt"
+echo "2. JUMP LINKS: grant Accessibility to the handler (so it can click sessions):"
+echo "      System Settings → Privacy & Security → Accessibility → +"
+echo "      → ~/Applications/ClaudeJump.app  (toggle ON)"
+echo "3. Run once to verify:   $BASE/run.sh"
+echo "==============================================================="
