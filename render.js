@@ -31,8 +31,13 @@ const bannerText = process.argv[5] || ""; // shown on idle days
 // (clickable in Gmail) that redirects to claude://; falls back to claude://
 // directly (works from the Desktop .html) when no webhook is configured.
 const execBase = process.argv[6] || "";   // Apps Script /exec URL for the open-app bounce
-// https bounce (clickable in Gmail) → claude://; falls back to direct claude://
-const openAppHref = execBase ? (execBase + "?open=1") : "claude://";
+// Two link modes:
+//   "local" → direct custom-scheme links (one click, no page) — for the Desktop .html
+//   "email" → https links (Gmail strips custom schemes) — bounce/redirect pages
+function openAppHref(mode) {
+  if (mode === "local") return "claude://";
+  return execBase ? (execBase + "?open=1") : "claude://";
+}
 
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -60,19 +65,21 @@ const JUMP_REDIRECT = "https://zeev-l.github.io/claude-jump/?t=";
 // "▶ open session" — jumps to the real session in the desktop app via the
 // claudejump:// handler. Only when the session has a real Claude title (the
 // Recents row is matched by that title); otherwise show a Recents hint.
-function jumpRow(s) {
+function jumpRow(s, mode) {
   const realTitle = (s.title && s.title.trim()) ? s.title.trim() : "";
   const foot = `margin-top:14px;border-top:1px solid ${C.line};padding-top:12px;`;
   if (!realTitle) {
     return `<div style="${foot}font-size:12px;color:${C.sub};">↩︎ לחזרה: פתח את הסשן מ-Recents באפליקציה</div>`;
   }
-  const href = JUMP_REDIRECT + encodeURIComponent(realTitle);
+  const href = (mode === "local")
+    ? "claudejump://open?title=" + encodeURIComponent(realTitle)
+    : JUMP_REDIRECT + encodeURIComponent(realTitle);
   return `<div style="${foot}">
     <a href="${esc(href)}" style="display:inline-block;background:${C.accent};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">▶ פתח את הסשן</a>
   </div>`;
 }
 
-function card(s, i) {
+function card(s, i, mode) {
   // join by sessionId; fall back to position (summary is returned in input order)
   const sum = byId[s.sessionId] || summary[i] || {};
   const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
@@ -102,13 +109,13 @@ function card(s, i) {
         ${did.length ? `<div style="margin-top:12px;"><span style="color:${C.sub};font-weight:600;font-size:14px;">מה נעשה</span>${didHtml}</div>` : ""}
         ${row("נקודת עצירה:", stopped)}
         ${row("הצעד הבא:", next)}
-        ${jumpRow(s)}
+        ${jumpRow(s, mode)}
       </td></tr>
     </table>
   </td></tr>`;
 }
 
-function shell(inner, intro) {
+function shell(inner, intro, mode) {
   return `<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"></head>
 <body dir="rtl" style="margin:0;padding:0;background:${C.bg};">
@@ -120,7 +127,7 @@ function shell(inner, intro) {
         <div style="font-size:22px;font-weight:800;color:${C.ink};margin-top:2px;">${esc(dateHuman)}</div>
         <div style="font-size:13px;color:${C.sub};margin-top:4px;">${intro}</div>
         <div style="margin-top:12px;">
-          <a href="${openAppHref}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">↗ פתח את אפליקציית Claude</a>
+          <a href="${openAppHref(mode)}" style="display:inline-block;background:${C.ink};color:#fff;text-decoration:none;font-size:13px;font-weight:600;padding:8px 14px;border-radius:8px;">↗ פתח את אפליקציית Claude</a>
         </div>
       </td></tr>
       ${bannerText ? `<tr><td style="padding:0 4px 16px;"><div style="background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:10px;padding:11px 14px;font-size:14px;line-height:1.5;">${esc(bannerText)}</div></td></tr>` : ""}
@@ -152,8 +159,10 @@ function textVersion(sessions) {
 
 const sessions = material.sessions || [];
 const intro = bannerText ? "תזכורת מהבריף האחרון." : "סיכום הפעילות שלך מאז הבריף הקודם.";
-const inner = sessions.map((s, i) => card(s, i)).join("");
+const innerLocal = sessions.map((s, i) => card(s, i, "local")).join("");
+const innerEmail = sessions.map((s, i) => card(s, i, "email")).join("");
 process.stdout.write(JSON.stringify({
-  html: shell(inner, intro),
+  html: shell(innerLocal, intro, "local"),   // Desktop .html — direct claudejump:// (one click)
+  emailHtml: shell(innerEmail, intro, "email"), // email body — https redirect (Gmail-clickable)
   text: textVersion(sessions),
 }));

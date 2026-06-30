@@ -43,6 +43,7 @@ TODAY="$(date '+%Y-%m-%d')"
 TODAY_HUMAN="$(date '+%A, %d %b %Y')"
 BRIEF_FILE="$OUT_DIR/brief-$TODAY.html"
 TEXT_FILE="$(mktemp /tmp/mb-text.XXXXXX.txt)"
+EMAIL_FILE="$(mktemp /tmp/mb-email.XXXXXX.html)"
 SUMMARY="$(mktemp /tmp/mb-summary.XXXXXX.json)"
 RENDER_JSON="$(mktemp /tmp/mb-render.XXXXXX.json)"
 LAST_MATERIAL="$STATE/last-material.json"
@@ -87,7 +88,7 @@ fi
 # --- 3. render the HTML newsletter (+ plain-text fallback) --------------------
 if [ "$HAS_ACTIVITY" = "true" ]; then
   if "$NODE_BIN" "$BASE/render.js" "$MATERIAL" "$SUMMARY" "$TODAY_HUMAN" "" "$MB_EXEC" > "$RENDER_JSON" 2>>"$RUN_LOG" && [ -s "$RENDER_JSON" ]; then
-    "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE"
+    "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text);fs.writeFileSync(process.argv[4],o.emailHtml||o.html)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE" "$EMAIL_FILE"
     # remember this brief so idle days can re-show it
     cp "$MATERIAL" "$LAST_MATERIAL"; cp "$SUMMARY" "$LAST_SUMMARY"; echo "$TODAY_HUMAN" > "$LAST_REAL_DATE"
     log "wrote HTML brief -> $BRIEF_FILE"
@@ -107,7 +108,7 @@ if [ "$HAS_ACTIVITY" != "true" ]; then
     echo '{"sessions":[]}' > /tmp/mb-empty.json
     "$NODE_BIN" "$BASE/render.js" /tmp/mb-empty.json /tmp/mb-empty.json "$TODAY_HUMAN" "$BANNER" "$MB_EXEC" > "$RENDER_JSON" 2>>"$RUN_LOG"
   fi
-  "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE"
+  "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text);fs.writeFileSync(process.argv[4],o.emailHtml||o.html)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE" "$EMAIL_FILE"
   log "wrote idle HTML brief -> $BRIEF_FILE"
 fi
 
@@ -141,7 +142,7 @@ if [ -f "$WEBHOOK_FILE" ] && [ -s "$WEBHOOK_FILE" ]; then
       const payload={subject:"Morning Brief — "+process.argv[3], htmlBody:html, body:text};
       if(process.argv[4]) payload.to=process.argv[4];
       process.stdout.write(JSON.stringify(payload));
-    ' "$BRIEF_FILE" "$TEXT_FILE" "$TODAY" "$EMAIL_TO")" 2>>"$RUN_LOG")" || true
+    ' "$EMAIL_FILE" "$TEXT_FILE" "$TODAY" "$EMAIL_TO")" 2>>"$RUN_LOG")" || true
   case "$HTTP_CODE" in
     302|200) log "email sent via webhook (http $HTTP_CODE)" ;;
     *)       log "WARN: webhook returned http ${HTTP_CODE:-<none>} (email may not have sent; .md is on Desktop)" ;;
@@ -155,5 +156,5 @@ fi
 "$NODE_BIN" -e 'console.log(require(process.argv[1]).now)' "$MATERIAL" > "$MARKER"
 log "marker advanced -> $(cat "$MARKER")"
 
-rm -f "$MATERIAL" "$TEXT_FILE" "$SUMMARY" "$RENDER_JSON"
+rm -f "$MATERIAL" "$TEXT_FILE" "$EMAIL_FILE" "$SUMMARY" "$RENDER_JSON"
 log "=== run done ==="
