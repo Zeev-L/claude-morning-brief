@@ -71,23 +71,41 @@ echo 'YOUR_EXEC_URL' > state/email-webhook.txt
 ```
 Until that file exists, email is simply skipped — the Desktop file is the source of truth.
 
-## Install / restore
+## Setup (works on any Mac, for anyone)
 
 ```sh
 git clone https://github.com/Zeev-L/morning-brief ~/.claude/morning-brief
 cd ~/.claude/morning-brief && ./install.sh
 ```
 
-`install.sh` creates the local dirs, builds + registers `ClaudeJump.app`, generates +
-loads the launchd job (with this machine's paths), and prints the remaining one-time
-manual steps:
+`install.sh` creates the local dirs, builds + registers `ClaudeJump.app`, and generates +
+loads the launchd job **with this machine's own paths** (no hardcoded username; `run.sh`
+auto-detects `node`/`claude`). Then do the three one-time manual steps it prints:
 
-1. **Email** — deploy `apps-script-mailer.gs` as a Web App (Execute as: Me, Who has access:
-   Anyone), then `echo '<exec-url>' > state/email-webhook.txt` and `echo '<you@x.com>' > state/email-to.txt`.
-2. **Jump links** — grant Accessibility to `~/Applications/ClaudeJump.app`.
-3. `./run.sh` to verify.
+1. **Email (your own Google account).** Open [script.google.com](https://script.google.com)
+   → New project → paste `apps-script-mailer.gs` → **Deploy ▸ New deployment ▸ Web app**,
+   **Execute as: Me**, **Who has access: Anyone** → authorize. Copy the `…/exec` URL, then:
+   ```sh
+   echo 'PASTE_YOUR_EXEC_URL'   > state/email-webhook.txt
+   echo 'you@example.com'       > state/email-to.txt
+   ```
+2. **Jump links.** Grant Accessibility to the handler so it can click sessions:
+   **System Settings ▸ Privacy & Security ▸ Accessibility ▸ +** → `~/Applications/ClaudeJump.app` → **ON**.
+3. **Verify:** `./run.sh` — an HTML brief should appear on your Desktop, an email should
+   arrive, and the "▶ open session" button in the Desktop `.html` should jump to that session.
 
-`state/` and `logs/` are gitignored (they hold the webhook secret, recipient, and brief content).
+`state/` and `logs/` are gitignored (webhook URL, recipient, brief content stay local).
+
+**Requirements / scope:**
+- The **jump-to-session** feature needs the **Claude desktop app** (it clicks the matching
+  session in *Recents* by title) — if you only use Claude Code in a terminal, the email +
+  brief still work, just without the jump.
+- Schedule is **Sun–Thu 07:33** (Israeli work week) — edit the `StartCalendarInterval` in
+  `install.sh` for a different week/time, then re-run it.
+- The brief UI is in **Hebrew**; change the labels/`dir="rtl"` in `render.js` for English.
+- The email redirect page (`zeev-l.github.io/claude-jump`) is generic and shared — nothing
+  to deploy. To self-host, fork [Zeev-L/claude-jump](https://github.com/Zeev-L/claude-jump),
+  enable Pages, and point `JUMP_REDIRECT` in `render.js` at your URL.
 
 ## Files
 
@@ -102,3 +120,55 @@ manual steps:
 | `install.sh` | one-shot setup / restore (dirs, ClaudeJump.app, launchd job) |
 
 The email redirect page lives in a separate public repo: [Zeev-L/claude-jump](https://github.com/Zeev-L/claude-jump).
+
+## Troubleshooting - what can break & how to fix it
+
+Real failure modes hit while building this - mostly macOS/Electron/Gmail quirks, not bugs.
+
+### Email never arrives
+- **The claude.ai Gmail connector won't send headless** - it requires an interactive grant,
+  always denied in a scheduled run. That's why we use Apps Script; don't try to enable it.
+- **Sent but empty / wrong recipient:** in an *Anyone* web app `Session.getActiveUser().getEmail()`
+  is empty (caller is anonymous) so `sendEmail("")` fails silently. Fix: recipient comes from
+  the POST `to` (`state/email-to.txt`), with a `getEffectiveUser()` fallback. Just set `email-to.txt`.
+- **`http 405` or a "file not found" page in the log:** that's only the post-redirect response;
+  `doPost` already ran and sent. `run.sh` does not follow the redirect and treats **302** as
+  success. To see what the web app received, open `<exec>?diag=1`.
+- **Org blocks public web apps:** open `<exec>` in a private browser window - a GET should
+  return JSON, not a login page.
+
+### "Open session" does nothing / opens an empty "General coding session"
+- **Empty "General coding session" duplicates** = `claude://resume` was used (it *imports* the
+  transcript as a new session). We deliberately do NOT use it. The jump uses `claudejump://`
+  then `ClaudeJump.app` then UI automation that opens the *existing* session.
+- **Clicking the link launches nothing** = almost always a stale LaunchServices registration
+  (the original bug here): the scheme was claimed by a deleted/duplicate app. Fix by
+  unregistering then re-registering the app:
+  ```sh
+  LS=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+  "$LS" -u ~/Applications/ClaudeJump.app; "$LS" -f ~/Applications/ClaudeJump.app
+  ```
+  then test: `open "claudejump://open?title=Some%20Session"`.
+- **The app runs but the AX tree is empty** (only window-chrome buttons): Electron doesn't
+  expose its accessibility tree until asked - `jump.applescript` sets `AXManualAccessibility`
+  on each Claude process to force it. If you edit the script and it stops finding sessions,
+  make sure that line survives.
+- **Permission "doesn't stick" after granting Accessibility:** re-signing the app changes its
+  code identity and RESETS the grant. After any rebuild of `ClaudeJump.app`, remove the old
+  Accessibility entry and re-add it (also `xattr -dr com.apple.quarantine` it and launch once).
+- **A session won't open:** the jump matches the Recents row whose name contains the session
+  title, so it only works for titled sessions visible in the desktop app's Recents. Untitled
+  sessions show an "open from Recents" hint instead.
+
+### Email link shows a page instead of opening instantly
+Expected and unavoidable from email: Gmail strips custom-scheme links (needs https) and
+browsers won't auto-launch a custom scheme without a user gesture. So email is always
+link -> page -> one click. The **Desktop `.html`** (auto-opened each morning) uses a *direct*
+`claudejump://` link = genuinely one click. First time ever, approve "Open ClaudeJump?"
+(tick "Always allow" to skip it afterward).
+
+### The morning job didn't run
+- Confirm it's loaded: `launchctl list | grep morning-brief`; if missing, re-run `install.sh`.
+- If the Mac was asleep at 07:33 it runs on wake. Logs: `logs/run.log`, `logs/launchd.*.log`.
+- `node`/`claude` not found under launchd's minimal PATH -> `run.sh` sets a PATH and
+  auto-detects both; if your install dirs are unusual, add them to its `export PATH=` line.
