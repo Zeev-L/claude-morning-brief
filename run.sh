@@ -42,8 +42,9 @@ mkdir -p "$STATE" "$LOGS" "$OUT_DIR"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$RUN_LOG"; }
 
 TODAY="$(date '+%Y-%m-%d')"
-TODAY_HUMAN="$(date '+%A, %d %b %Y')"
+TODAY_HUMAN="$(date '+%A, %d %b %Y · %H:%M')"   # includes generation time = "last updated"
 BRIEF_FILE="$OUT_DIR/brief-$TODAY.html"
+LATEST_FILE="$OUT_DIR/latest.html"              # stable path — always the newest brief
 TEXT_FILE="$(mktemp /tmp/mb-text.XXXXXX.txt)"
 EMAIL_FILE="$(mktemp /tmp/mb-email.XXXXXX.html)"
 SUMMARY="$(mktemp /tmp/mb-summary.XXXXXX.json)"
@@ -113,6 +114,10 @@ if [ "$HAS_ACTIVITY" != "true" ]; then
   "$NODE_BIN" -e 'const o=require(process.argv[1]);const fs=require("fs");fs.writeFileSync(process.argv[2],o.html);fs.writeFileSync(process.argv[3],o.text);fs.writeFileSync(process.argv[4],o.emailHtml||o.html)' "$RENDER_JSON" "$BRIEF_FILE" "$TEXT_FILE" "$EMAIL_FILE"
   log "wrote idle HTML brief -> $BRIEF_FILE"
 fi
+
+# --- stable "latest" link: always points at the newest brief -----------------
+# Bookmark file://…/Morning Briefs/latest.html once and it always shows today's.
+cp "$BRIEF_FILE" "$LATEST_FILE" 2>/dev/null || true
 
 # --- 4. notify + open ---------------------------------------------------------
 osascript -e 'display notification "הבריף מוכן על הדסקטופ" with title "Morning Brief" sound name "Glass"' >/dev/null 2>&1 || true

@@ -34,6 +34,8 @@ launchd (Sun–Thu 07:33)
         ├─ claude -p        summarize each session → strict JSON (did / stopped / next)
         ├─ render.js        join + render a modern HTML newsletter (+ plain-text fallback)
         ├─ write .html      → ~/Desktop/Morning Briefs/brief-YYYY-MM-DD.html   ← guaranteed
+        │                     (+ copy to …/latest.html — a STABLE path to bookmark;
+        │                      always the newest brief, header shows date + update time)
         ├─ notify + open
         └─ POST to webhook  → HTML email via Apps Script  (best-effort)
 ```
