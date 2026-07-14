@@ -49,6 +49,16 @@ function openAppHref(mode) {
 const esc = (s) => String(s == null ? "" : s)
   .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 
+// Timestamps in the transcripts are UTC; show them in the machine's LOCAL wall-clock
+// (render runs on the user's Mac) so the times match when they actually worked.
+function fmtLocal(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (isNaN(d)) return "";
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
 const byId = {};
 summary.forEach((x) => { if (x && x.sessionId) byId[x.sessionId] = x; });
 
@@ -94,7 +104,7 @@ function card(s, i, mode) {
   const did = Array.isArray(sum.did) ? sum.did : (sum.did ? [sum.did] : []);
   const stopped = sum.stopped || "";
   const next = sum.next || "";
-  const when = s.lastActivityISO ? s.lastActivityISO.slice(0, 16).replace("T", " ") : "";
+  const when = fmtLocal(s.lastActivityISO);
   const proj = s.project || "";
 
   const didHtml = did.length
