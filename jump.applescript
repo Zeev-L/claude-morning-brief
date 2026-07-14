@@ -10,10 +10,22 @@ on run argv
 	if (count of argv) > 0 then set u to item 1 of argv
 	if u contains "dump" then
 		doDump()
+	else if u contains "://brief" then
+		openBrief()
 	else
 		openByTitle(extractTitle(u))
 	end if
 end run
+
+-- claudejump://brief — open the newest Morning Brief on the Desktop. Lets the
+-- bridge (or any https page) open the LOCAL brief in one click; a direct file://
+-- link is blocked by browsers from an https origin, a custom scheme is not.
+on openBrief()
+	set p to (POSIX path of (path to home folder)) & "Desktop/Claude Morning Brief/latest.html"
+	try
+		do shell script "open " & quoted form of p
+	end try
+end openBrief
 
 on extractTitle(u)
 	set AppleScript's text item delimiters to "title="
