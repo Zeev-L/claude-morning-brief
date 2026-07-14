@@ -12,9 +12,10 @@ weekend — it takes ages to remember what each of your half-finished sessions w
 
 A modern **HTML newsletter**, one card per session, **ordered oldest → newest**. Each card:
 
-- **Title = the session's real Claude name** (the sidebar title); falls back to a short
-  inferred topic when a session was never named.
-- **מה נעשה** (what got done) · **נקודת עצירה** (where it stopped) · **הצעד הבא** (next step).
+- **Title = the session's real Claude name** (the sidebar title — manual *or* auto-generated).
+  Only **named** sessions appear; untitled/archived ones are filtered out.
+- A one-line **תיאור** (what the session is about) · **מה נעשה** (what got done) ·
+  **הפעולה האחרונה** (last action / where it stopped) · **הצעד הבא** (next step).
 - A **▶ פתח את הסשן** button that reopens that exact (titled) session in the **Claude
   desktop app**, right where you left off. From the **Desktop `.html`** it's one click
   (direct `claudejump://`); in **email** it goes via a tiny https redirect because Gmail
@@ -80,7 +81,17 @@ cd ~/.claude/morning-brief && ./install.sh
 
 `install.sh` creates the local dirs, builds + registers `ClaudeJump.app`, and generates +
 loads the launchd job **with this machine's own paths** (no hardcoded username; `run.sh`
-auto-detects `node`/`claude`). Then do the three one-time manual steps it prints:
+auto-detects `node`/`claude`). It also runs a **preflight** that checks the one hard
+prerequisite below. Then do the one-time manual steps it prints:
+
+**Prerequisite — the `claude` CLI, installed *and* logged in.** The summarizer shells out
+to `claude -p`, so:
+- The **standalone CLI must be installed** — the Claude *desktop app* alone is NOT enough:
+  `npm install -g @anthropic-ai/claude-code` (needs Node).
+- It must be **signed in** (uses your Claude subscription, no API cost): `claude auth login`.
+
+If either is missing, `claude -p` returns "Not logged in" instead of JSON and every card
+comes out with a title but no content. `install.sh`'s preflight flags both.
 
 1. **Email (your own Google account).** Open [script.google.com](https://script.google.com)
    → New project → paste `apps-script-mailer.gs` → **Deploy ▸ New deployment ▸ Web app**,
@@ -97,9 +108,14 @@ auto-detects `node`/`claude`). Then do the three one-time manual steps it prints
 `state/` and `logs/` are gitignored (webhook URL, recipient, brief content stay local).
 
 **Requirements / scope:**
-- The **jump-to-session** feature needs the **Claude desktop app** (it clicks the matching
-  session in *Recents* by title) — if you only use Claude Code in a terminal, the email +
-  brief still work, just without the jump.
+- The **`claude` CLI** must be installed and logged in (see Prerequisite above) — this is
+  what generates the per-session summaries.
+- The **jump-to-session** feature needs the **Claude desktop app**. It works two ways,
+  auto-detected: if the app opens **each session in its own window** (window title = session
+  title, e.g. Israeli-RTL / multi-window builds) it **raises that window**; otherwise it
+  clicks the matching **Recents** sidebar row by title. If the session's window is closed and
+  no Recents row matches, it just brings the app to the front so you can pick it (the card
+  title = the session name). Terminal-only Claude Code gets email + brief, just no jump.
 - Schedule is **Sun–Thu 07:33** (Israeli work week) — edit the `StartCalendarInterval` in
   `install.sh` for a different week/time, then re-run it.
 - The brief UI is in **Hebrew**; change the labels/`dir="rtl"` in `render.js` for English.
@@ -111,7 +127,7 @@ auto-detects `node`/`claude`). Then do the three one-time manual steps it prints
 
 | file | role |
 |------|------|
-| `gather.js` | deterministic transcript scanner — activity + session titles, de-noises the tool's own `claude -p` calls, merges split conversations (no model, no network) |
+| `gather.js` | deterministic transcript scanner — activity + session titles, de-noises the tool's own `claude -p` calls, merges split conversations (no model, no network). **Titled sessions only**: resolves each session's real name (incl. Claude's *auto*-generated titles) from the desktop app's session index at `~/Library/Application Support/Claude/claude-code-sessions/**/local_*.json` (keyed by `cliSessionId` = the `.jsonl` file stem); untitled/archived sessions are skipped |
 | `render.js` | renders the HTML newsletter (local + email variants) + plain-text fallback |
 | `run.sh` | orchestrator: gather → summarize (JSON) → render → write → notify → email |
 | `apps-script-mailer.gs` | Gmail web-app mailer (sends `htmlBody`; `?jump=`/`?open=` bounces) — deploy separately |
@@ -124,6 +140,19 @@ The email redirect page lives in a separate public repo: [Zeev-L/claude-jump](ht
 ## Troubleshooting - what can break & how to fix it
 
 Real failure modes hit while building this - mostly macOS/Electron/Gmail quirks, not bugs.
+
+### Cards have a title but no content (empty מה נעשה / הפעולה האחרונה / הצעד הבא)
+The summarizer (`claude -p`) isn't returning JSON — almost always **auth**. Check
+`claude auth status`; if it's not `"loggedIn": true`, run `claude auth login`. If `claude`
+isn't found at all, `npm install -g @anthropic-ai/claude-code` first. (The raw output is
+logged to `logs/run.log`; "Not logged in · Please run /login" there is the tell.)
+
+### Sessions are missing from the brief
+Only **named** sessions are shown. A session counts as named if it has a title in the
+desktop app — including Claude's **auto**-generated ones (`gather.js` reads the app's session
+index for this, not just the transcript's `custom-title` record). A session still won't show
+if it's **archived**, had fewer than 2 real user messages, or falls outside the "since last
+brief" window. Untitled sessions are intentionally dropped.
 
 ### Email never arrives
 - **The claude.ai Gmail connector won't send headless** - it requires an interactive grant,

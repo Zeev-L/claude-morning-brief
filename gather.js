@@ -20,6 +20,36 @@ const os = require("os");
 const PROJECTS_DIR = path.join(os.homedir(), ".claude", "projects");
 const STATE_DIR = path.join(os.homedir(), ".claude", "morning-brief", "state");
 const MARKER = path.join(STATE_DIR, "last-brief.txt");
+// The Claude desktop app stores per-session metadata (incl. the sidebar title,
+// whether auto- or user-set) here, keyed by cliSessionId = the .jsonl file stem.
+// The transcript itself only carries a `custom-title` record for MANUALLY titled
+// sessions, so auto-titled ones look untitled unless we read this index.
+const APP_SESSIONS_DIR = path.join(
+  os.homedir(), "Library", "Application Support", "Claude", "claude-code-sessions"
+);
+
+// build { cliSessionId -> {title, source, archived} } from the desktop app store
+function readAppTitles() {
+  const map = {};
+  const stack = [APP_SESSIONS_DIR];
+  while (stack.length) {
+    const d = stack.pop();
+    let entries;
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch (_) { continue; }
+    for (const e of entries) {
+      const p = path.join(d, e.name);
+      if (e.isDirectory()) { stack.push(p); continue; }
+      if (!e.name.endsWith(".json")) continue;
+      try {
+        const o = JSON.parse(fs.readFileSync(p, "utf8"));
+        if (o.cliSessionId && o.title) {
+          map[o.cliSessionId] = { title: o.title, source: o.titleSource || "auto", archived: !!o.isArchived };
+        }
+      } catch (_) {}
+    }
+  }
+  return map;
+}
 
 // --- caps so the summarizer prompt stays sane ---
 const MAX_USER_MSGS = 18;       // per session
@@ -69,6 +99,7 @@ function cleanProjectName(dirName, cwd) {
 function main() {
   const since = readSince();
   const now = Date.now();
+  const appTitles = readAppTitles();   // cliSessionId -> {title, source, archived}
   let dirs = [];
   try {
     dirs = fs.readdirSync(PROJECTS_DIR);
@@ -142,12 +173,19 @@ function main() {
       if (!isInteractive) continue;   // skip the tool's own headless `claude -p` calls
       if (realUserTotal < 2) continue; // skip trivial/abandoned fragments
 
+      const sessionId = file.replace(/\.jsonl$/, "");
+      // prefer the desktop app's title (covers AUTO-named sessions the transcript
+      // has no custom-title record for); fall back to any in-transcript title.
+      const appMeta = appTitles[sessionId];
+      if (appMeta && appMeta.archived) continue;   // user archived it → don't surface
+      const resolvedTitle = (appMeta && appMeta.title) || title;
+
       sessions.push({
         project: cleanProjectName(dir, cwd),
         cwd: cwd || null,
-        sessionId: file.replace(/\.jsonl$/, ""),
+        sessionId: sessionId,
         rootUuid: rootUuid,
-        title: title,
+        title: resolvedTitle,
         lastActivity: sessionLast,
         lastActivityISO: new Date(sessionLast).toISOString(),
         userMsgs: userMsgs.slice(0, MAX_USER_MSGS),
@@ -199,6 +237,10 @@ function main() {
       lastAssistant: g.lastAssistant.slice(-MAX_ASST_TAIL),
       _sort: g.lastActivity,
     }));
+
+  // only named sessions: the brief is worthless for untitled ones (no jump target,
+  // and the user asked to see only sessions they deliberately named in Claude).
+  units = units.filter((u) => u.title && u.title.trim());
 
   // enforce a rough total budget — units are newest-first, so iterate forward
   // and drop the oldest if we run over.

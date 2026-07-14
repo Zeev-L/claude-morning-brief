@@ -57,6 +57,18 @@ on openByTitle(theTitle)
 			my forceA11y(p)
 		end repeat
 		delay 0.7
+		-- setup A (per-session windows, e.g. Claude-RTL): raise the window whose
+		-- name contains the title. Most reliable when each session is its own window.
+		repeat with p in procs
+			try
+				set w to (first window of p whose name contains theTitle)
+				set frontmost of p to true
+				delay 0.15
+				perform action "AXRaise" of w
+				return
+			end try
+		end repeat
+		-- setup B (single window + Recents sidebar): press the matching sidebar button.
 		repeat with p in procs
 			try
 				set b to my findBtn(window 1 of p, theTitle, 0)
@@ -68,7 +80,26 @@ on openByTitle(theTitle)
 				end if
 			end try
 		end repeat
+		-- fallback: the session's window is closed (common in the per-window setup)
+		-- and no sidebar button matched. We can't reliably click a Recents row from
+		-- Electron's sparse a11y tree, so just bring the Claude app to the front — the
+		-- user lands on Recents and picks the session (its name = the card title).
+		-- Belt-and-suspenders: System Events frontmost + `open -a` on the app bundle.
+		repeat with p in procs
+			try
+				set frontmost of p to true
+				try
+					set appPath to POSIX path of (application file of p)
+					do shell script "open -a " & quoted form of appPath
+				end try
+				return
+			end try
+		end repeat
 	end tell
+	-- no Claude process at all → launch/focus the app via its own scheme
+	try
+		do shell script "open claude://"
+	end try
 end openByTitle
 
 -- diagnostic dump of the sidebar tree

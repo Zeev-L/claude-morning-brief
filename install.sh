@@ -12,6 +12,23 @@ mkdir -p "$BASE/state" "$BASE/logs" "$HOME/Desktop/Morning Briefs"
 echo "→ chmod scripts…"
 chmod +x "$BASE/run.sh" "$BASE/gather.js" "$BASE/render.js" "$BASE/install.sh" 2>/dev/null || true
 
+echo "→ preflight: the summarizer needs the 'claude' CLI, installed AND logged in…"
+# These two are the most common reasons a morning brief comes out empty:
+#   1) the standalone CLI isn't installed (the desktop app alone is NOT enough), or
+#   2) it's installed but not signed in, so `claude -p` returns "Not logged in".
+CLAUDE_PREFLIGHT_OK=1
+if ! command -v claude >/dev/null 2>&1; then
+  CLAUDE_PREFLIGHT_OK=0
+  echo "  ! 'claude' CLI not found. Install it (needs Node):"
+  echo "      npm install -g @anthropic-ai/claude-code"
+elif ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
+  CLAUDE_PREFLIGHT_OK=0
+  echo "  ! 'claude' CLI is installed but NOT logged in. Sign in once (uses your subscription):"
+  echo "      claude auth login"
+else
+  echo "  ✓ claude CLI present and logged in"
+fi
+
 echo "→ building + registering the claudejump:// 'open session' handler…"
 # A thin app that the brief's per-session links invoke; it runs jump.applescript,
 # which forces Electron's a11y tree and clicks the matching session in Recents
@@ -70,6 +87,10 @@ launchctl list | grep morning-brief && echo "  ✓ job loaded" || echo "  ! job 
 
 echo ""
 echo "=================== MANUAL STEPS (one-time) ==================="
+if [ "$CLAUDE_PREFLIGHT_OK" -ne 1 ]; then
+  echo "0. CLAUDE CLI (required — the brief is empty without it): see the preflight"
+  echo "   warning above (install it and/or 'claude auth login')."
+fi
 echo "1. EMAIL: deploy apps-script-mailer.gs as a Web App"
 echo "   (script.google.com → New project → paste → Deploy → Web app,"
 echo "    Execute as: Me, Who has access: Anyone → authorize → copy /exec URL):"

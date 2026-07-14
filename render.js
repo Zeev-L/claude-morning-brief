@@ -83,6 +83,7 @@ function card(s, i, mode) {
   // join by sessionId; fall back to position (summary is returned in input order)
   const sum = byId[s.sessionId] || summary[i] || {};
   const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
+  const about = sum.about || "";
   const did = Array.isArray(sum.did) ? sum.did : (sum.did ? [sum.did] : []);
   const stopped = sum.stopped || "";
   const next = sum.next || "";
@@ -106,8 +107,9 @@ function card(s, i, mode) {
       <tr><td dir="rtl" style="padding:18px 20px;text-align:right;">
         <div style="font-size:12px;color:${C.sub};margin-bottom:2px;">${esc(proj)}${when ? " · " + esc(when) : ""}</div>
         <div style="font-size:18px;font-weight:700;color:${C.ink};line-height:1.3;">${esc(title)}</div>
+        ${about ? `<div style="margin-top:6px;font-size:14px;line-height:1.5;color:${C.ink};">${esc(about)}</div>` : ""}
         ${did.length ? `<div style="margin-top:12px;"><span style="color:${C.sub};font-weight:600;font-size:14px;">מה נעשה</span>${didHtml}</div>` : ""}
-        ${row("נקודת עצירה:", stopped)}
+        ${row("הפעולה האחרונה:", stopped)}
         ${row("הצעד הבא:", next)}
         ${jumpRow(s, mode)}
       </td></tr>
@@ -148,9 +150,10 @@ function textVersion(sessions) {
     const sum = byId[s.sessionId] || summary[i] || {};
     const title = (s.title && s.title.trim()) || sum.title || "סשן ללא שם";
     out += `■ ${title}  [${s.project || ""}]\n`;
+    if (sum.about) out += `   ${sum.about}\n`;
     const did = Array.isArray(sum.did) ? sum.did : [];
     did.forEach((d) => { out += `   • ${d}\n`; });
-    if (sum.stopped) out += `   נקודת עצירה: ${sum.stopped}\n`;
+    if (sum.stopped) out += `   הפעולה האחרונה: ${sum.stopped}\n`;
     if (sum.next) out += `   הצעד הבא: ${sum.next}\n`;
     out += `   לחזרה: פתח "${title}" מ-Recents באפליקציה\n\n`;
   });
