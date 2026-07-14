@@ -1,11 +1,11 @@
 #!/bin/zsh
 # =============================================================================
-# Morning Brief — run.sh
+# Claude Morning Brief — run.sh
 # -----------------------------------------------------------------------------
 # Runs each weekday morning via launchd. Pipeline:
 #   1. gather.js  -> collect what you touched since the last brief (ground truth)
 #   2. claude -p  -> summarize into a short brief (per project: did / stopped / next)
-#   3. write .md  -> ~/Desktop/Morning Briefs/  (GUARANTEED channel)
+#   3. write .md  -> ~/Desktop/Claude Morning Brief/  (GUARANTEED channel)
 #   4. notify + open  (best-effort)
 #   5. Gmail draft to self  (best-effort; never blocks the file)
 #
@@ -23,7 +23,7 @@ HOME_DIR="$HOME"
 BASE="$HOME_DIR/.claude/morning-brief"
 STATE="$BASE/state"
 LOGS="$BASE/logs"
-OUT_DIR="$HOME_DIR/Desktop/Morning Briefs"
+OUT_DIR="$HOME_DIR/Desktop/Claude Morning Brief"
 
 # launchd gives a minimal PATH; set one that finds node/claude/system tools
 # (covers Apple-Silicon + Intel Homebrew and the Claude CLI install dir)
@@ -116,11 +116,11 @@ if [ "$HAS_ACTIVITY" != "true" ]; then
 fi
 
 # --- stable "latest" link: always points at the newest brief -----------------
-# Bookmark file://…/Morning Briefs/latest.html once and it always shows today's.
+# Bookmark file://…/Claude Morning Brief/latest.html once and it always shows today's.
 cp "$BRIEF_FILE" "$LATEST_FILE" 2>/dev/null || true
 
 # --- 4. notify + open ---------------------------------------------------------
-osascript -e 'display notification "הבריף מוכן על הדסקטופ" with title "Morning Brief" sound name "Glass"' >/dev/null 2>&1 || true
+osascript -e 'display notification "הבריף מוכן על הדסקטופ" with title "Claude Morning Brief" sound name "Glass"' >/dev/null 2>&1 || true
 open "$BRIEF_FILE" >/dev/null 2>&1 || true
 
 # --- 5. Email delivery via Apps Script webhook (best-effort) ------------------
@@ -146,7 +146,7 @@ if [ -f "$WEBHOOK_FILE" ] && [ -s "$WEBHOOK_FILE" ]; then
       const fs=require("fs");
       const html=fs.readFileSync(process.argv[1],"utf8");
       const text=fs.readFileSync(process.argv[2],"utf8");
-      const payload={subject:"Morning Brief — "+process.argv[3], htmlBody:html, body:text};
+      const payload={subject:"Claude Morning Brief — "+process.argv[3], htmlBody:html, body:text};
       if(process.argv[4]) payload.to=process.argv[4];
       process.stdout.write(JSON.stringify(payload));
     ' "$EMAIL_FILE" "$TEXT_FILE" "$TODAY" "$EMAIL_TO")" 2>>"$RUN_LOG")" || true

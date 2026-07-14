@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * gather.js — Morning Brief material collector
+ * gather.js — Claude Morning Brief material collector
  * --------------------------------------------
  * Walks ~/.claude/projects/<encoded-cwd>/*.jsonl, finds everything you touched
  * SINCE the last brief, and prints compact raw material for the summarizer.

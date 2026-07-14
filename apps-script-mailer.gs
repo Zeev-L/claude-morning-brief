@@ -1,5 +1,5 @@
 /**
- * Morning Brief — Mailer (Apps Script Web App)
+ * Claude Morning Brief — Mailer (Apps Script Web App)
  * --------------------------------------------
  * A tiny endpoint that emails your morning brief to yourself, server-side,
  * from your own Google account. No local credentials, runs fully headless.
@@ -35,7 +35,7 @@ function doPost(e) {
     var data = raw ? JSON.parse(raw) : ((e && e.parameter) ? e.parameter : {});
 
     var to = data.to || Session.getEffectiveUser().getEmail();
-    var subject = data.subject || 'Morning Brief';
+    var subject = data.subject || 'Claude Morning Brief';
     var body = data.body || '(empty)';
     diag.to = to;
     diag.hasHtml = !!data.htmlBody;

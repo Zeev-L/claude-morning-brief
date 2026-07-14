@@ -1,4 +1,4 @@
-# Morning Brief ☀️
+# Claude Morning Brief ☀️
 
 A daily "where did I leave off?" briefing for people who run **many parallel Claude Code
 sessions**. Every weekday morning it reads your recent session transcripts, summarizes what
@@ -33,7 +33,7 @@ launchd (Sun–Thu 07:33)
         │                   incl. each session's Claude title from its custom-title records)
         ├─ claude -p        summarize each session → strict JSON (did / stopped / next)
         ├─ render.js        join + render a modern HTML newsletter (+ plain-text fallback)
-        ├─ write .html      → ~/Desktop/Morning Briefs/brief-YYYY-MM-DD.html   ← guaranteed
+        ├─ write .html      → ~/Desktop/Claude Morning Brief/brief-YYYY-MM-DD.html  ← guaranteed
         │                     (+ copy to …/latest.html — a STABLE path to bookmark;
         │                      always the newest brief, header shows date + update time)
         ├─ notify + open
@@ -77,9 +77,12 @@ Until that file exists, email is simply skipped — the Desktop file is the sour
 ## Setup (works on any Mac, for anyone)
 
 ```sh
-git clone https://github.com/Zeev-L/morning-brief ~/.claude/morning-brief
+git clone https://github.com/Zeev-L/claude-morning-brief ~/.claude/morning-brief
 cd ~/.claude/morning-brief && ./install.sh
 ```
+
+> The clone target stays `~/.claude/morning-brief` (the scripts, launchd job and
+> `ClaudeJump.app` reference that path) even though the repo is `claude-morning-brief`.
 
 `install.sh` creates the local dirs, builds + registers `ClaudeJump.app`, and generates +
 loads the launchd job **with this machine's own paths** (no hardcoded username; `run.sh`

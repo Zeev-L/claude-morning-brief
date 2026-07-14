@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Morning Brief — installer / restore script
+# Claude Morning Brief — installer / restore script
 # Run after cloning this repo to ~/.claude/morning-brief on a Mac.
 set -eu
 
@@ -7,7 +7,7 @@ BASE="$HOME/.claude/morning-brief"
 PLIST_DST="$HOME/Library/LaunchAgents/com.zeev.morning-brief.plist"
 
 echo "→ creating local dirs (state, logs, Desktop output)…"
-mkdir -p "$BASE/state" "$BASE/logs" "$HOME/Desktop/Morning Briefs"
+mkdir -p "$BASE/state" "$BASE/logs" "$HOME/Desktop/Claude Morning Brief"
 
 echo "→ chmod scripts…"
 chmod +x "$BASE/run.sh" "$BASE/gather.js" "$BASE/render.js" "$BASE/install.sh" 2>/dev/null || true

@@ -125,7 +125,7 @@ function shell(inner, intro, mode) {
   <tr><td align="center">
     <table dir="rtl" role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;">
       <tr><td dir="rtl" style="padding:0 4px 18px;text-align:right;">
-        <div style="font-size:13px;color:${C.accent};font-weight:700;letter-spacing:.4px;">☀️ MORNING BRIEF</div>
+        <div style="font-size:13px;color:${C.accent};font-weight:700;letter-spacing:.4px;">☀️ CLAUDE MORNING BRIEF</div>
         <div style="font-size:22px;font-weight:800;color:${C.ink};margin-top:2px;">${esc(dateHuman)}</div>
         <div style="font-size:13px;color:${C.sub};margin-top:4px;">${intro}</div>
         <div style="margin-top:12px;">
