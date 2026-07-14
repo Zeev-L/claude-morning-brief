@@ -22,7 +22,14 @@ try {
   // tolerate code fences / stray prose: extract the outermost [ ... ] array
   const a = raw.indexOf("["), b = raw.lastIndexOf("]");
   if (a !== -1 && b > a) raw = raw.slice(a, b + 1);
-  summary = JSON.parse(raw);
+  try {
+    summary = JSON.parse(raw);
+  } catch (_) {
+    // LLMs occasionally emit invalid JSON escapes (e.g. \' inside Hebrew text like
+    // "א'–ה'"), which crashes JSON.parse and would blank out EVERY card. Drop the
+    // backslash before any char that isn't a valid JSON escape, then retry.
+    summary = JSON.parse(raw.replace(/\\([^"\\/bfnrtu])/g, "$1"));
+  }
   if (!Array.isArray(summary)) summary = [];
 } catch (_) { summary = []; }
 const dateHuman = process.argv[4] || "";
