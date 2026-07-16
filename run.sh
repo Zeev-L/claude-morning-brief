@@ -32,6 +32,7 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:$HOM
 NODE_BIN="$(command -v node || echo /opt/homebrew/bin/node)"
 CLAUDE_BIN="$(command -v claude || echo "$HOME_DIR/.local/bin/claude")"
 
+SUMMARY_FAILED=0            # set when the summarizer never produced usable JSON
 MARKER="$STATE/last-brief.txt"
 LAST_REAL="$STATE/last-real-brief.md"
 LAST_REAL_DATE="$STATE/last-real-brief-date.txt"
@@ -81,9 +82,30 @@ if [ "$HAS_ACTIVITY" = "true" ]; then
   PROMPT="$INSTRUCTION
 $(cat "$MATERIAL")"
   log "calling claude -p (summarize -> JSON)..."
-  "$CLAUDE_BIN" -p "$PROMPT" --model "$MODEL" > "$SUMMARY" 2>>"$RUN_LOG"
-  if [ ! -s "$SUMMARY" ]; then
-    log "ERROR: empty summary from claude; falling back to idle brief"
+  # The summarizer is the fragile link. It has failed as: empty output, a
+  # "Not logged in" notice, "API Error: Connection closed mid-response", and JSON
+  # with an invalid escape. All of those are NON-EMPTY, so the old `-s` test
+  # passed them through and the brief went out with titles but no content.
+  # Now: validate the real contract, retry transients, and cap a hung call.
+  SUMMARY_OK=0
+  for attempt in 1 2 3; do
+    : > "$SUMMARY"
+    "$CLAUDE_BIN" -p "$PROMPT" --model "$MODEL" > "$SUMMARY" 2>>"$RUN_LOG" &
+    CPID=$!
+    ( sleep 420; kill -9 "$CPID" 2>/dev/null ) & WPID=$!
+    wait "$CPID" 2>/dev/null || true
+    kill -9 "$WPID" 2>/dev/null || true
+    if "$NODE_BIN" "$BASE/check-summary.js" "$SUMMARY" 2>>"$RUN_LOG"; then
+      SUMMARY_OK=1
+      log "summary valid (attempt $attempt)"
+      break
+    fi
+    log "WARN: unusable summary (attempt $attempt) — starts: $(head -c 160 "$SUMMARY" | tr '\n' ' ')"
+    [ "$attempt" -lt 3 ] && sleep 20
+  done
+  if [ "$SUMMARY_OK" -ne 1 ]; then
+    log "ERROR: summary unusable after 3 attempts — sending the last good brief instead of empty cards"
+    SUMMARY_FAILED=1
     HAS_ACTIVITY="false"
   fi
 fi
@@ -104,7 +126,12 @@ fi
 if [ "$HAS_ACTIVITY" != "true" ]; then
   # idle: no new activity — re-show the last real brief with a banner.
   LAST_WORK_DATE="לא ידוע"; [ -n "$LAST_ACTIVITY_ISO" ] && LAST_WORK_DATE="$(echo "$LAST_ACTIVITY_ISO" | cut -dT -f1)"
-  BANNER="אין פעילות חדשה מאז הבריף הקודם. תאריך העבודה האחרון שנרשם: $LAST_WORK_DATE."
+  if [ "$SUMMARY_FAILED" -eq 1 ]; then
+    # be honest: there WAS activity, the summarizer just failed. Don't pretend it was a quiet day.
+    BANNER="⚠️ לא הצלחתי לסכם את הסשנים הבוקר (שגיאה זמנית של ה-API). זהו הבריף האחרון שהצליח — הסשנים החדשים יסוכמו בהרצה הבאה."
+  else
+    BANNER="אין פעילות חדשה מאז הבריף הקודם. תאריך העבודה האחרון שנרשם: $LAST_WORK_DATE."
+  fi
   if [ -f "$LAST_MATERIAL" ] && [ -f "$LAST_SUMMARY" ]; then
     "$NODE_BIN" "$BASE/render.js" "$LAST_MATERIAL" "$LAST_SUMMARY" "$TODAY_HUMAN" "$BANNER" "$MB_EXEC" > "$RENDER_JSON" 2>>"$RUN_LOG"
   else
@@ -159,9 +186,16 @@ else
 fi
 
 # --- 6. advance the marker ----------------------------------------------------
-# Always move forward so we don't re-summarize the same window next run.
-"$NODE_BIN" -e 'console.log(require(process.argv[1]).now)' "$MATERIAL" > "$MARKER"
-log "marker advanced -> $(cat "$MARKER")"
+# Move forward so we don't re-summarize the same window next run — EXCEPT when the
+# summarizer failed. Advancing on failure silently ATE a day of activity: those
+# sessions were never summarized and never came back. Keep the marker so the next
+# run picks them up.
+if [ "$SUMMARY_FAILED" -eq 1 ]; then
+  log "marker NOT advanced (summary failed) — these sessions will be retried next run"
+else
+  "$NODE_BIN" -e 'console.log(require(process.argv[1]).now)' "$MATERIAL" > "$MARKER"
+  log "marker advanced -> $(cat "$MARKER")"
+fi
 
 rm -f "$MATERIAL" "$TEXT_FILE" "$EMAIL_FILE" "$SUMMARY" "$RENDER_JSON"
 log "=== run done ==="
